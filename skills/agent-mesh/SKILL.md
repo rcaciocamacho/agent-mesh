@@ -39,11 +39,15 @@ from client import Client
 kb = Client("http://<rack-host>:8084", token="<KB_TOKEN>")
 kb.schema()                                   # labels + edge types disponibles
 kb.search("presencia jarvis", limit=10)       # búsqueda full-text (FTS)
+kb.similar("frase/idea", limit=10)            # similaridad semántica por coseno
 kb.graph(node_id, hops=2)                     # vecinos / recorrido del grafo
 ```
 
-Base URL y token en config/env (`KB_BASE`, `KB_TOKEN`). Si no se puede alcanzar el servicio,
-**degradar con elegancia**: usa la memoria local y anota que la KB no estaba disponible.
+Base URL y token (`KB_BASE`, `KB_TOKEN`) viven en `agent-mesh/.env` (el mismo valor lo
+usa el servicio del MateBook). **El token es OBLIGATORIO desde fase 2**: sin
+`Authorization: Bearer <token>` el servicio responde 401 (excepto `/health`, abierto
+para monitoreo). Si no se puede alcanzar el servicio, **degradar con elegancia**: usa la
+memoria local y anota que la KB no estaba disponible.
 
 ## Cómo escribir (hechos compartibles)
 Solo escribe hechos **durables y relevantes para otros agentes** (infra, servicios, IPs,
@@ -64,7 +68,8 @@ kb.upsert_edge("GESTIONA", ruben["id"], jarvis["id"])
 ## Pitfalls
 - **No duplicar**: antes de escribir, `search()` para ver si el hecho ya existe (upsert por label+name).
 - **No volcar nada privado/no compartible** sin necesidad: es una base compartida por varios agentes.
-- **Auth**: si `KB_TOKEN` está configurado, el servicio exige `Bearer`; un 401 = token ausente/mal.
+- **Auth (obligatoria)**: desde fase 2, todos los endpoints salvo `/health` exigen
+  `Authorization: Bearer <token>` (en `agent-mesh/.env`, `KB_TOKEN`). 401 = token ausente/mal.
 - **Disponibilidad**: si el servicio cae, no bloquees; degrada a memoria local y avisa.
 - Para migrar/mantener la semilla: `python scripts/seed.py` desde el repo (ingiere MEMORY/USER/skills).
 
