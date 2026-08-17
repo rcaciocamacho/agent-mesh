@@ -1,6 +1,6 @@
 ---
 name: agent-mesh
-description: Use to read/write the shared agent-mesh knowledge graph (memory shared by all agents).
+description: Use to read/write the shared agent-mesh knowledge graph.
 version: 1.0.0
 author: Rubén + Hermes
 license: MIT
