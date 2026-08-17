@@ -5,9 +5,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py store.py ./
+COPY main.py store.py embeddings.py ./
 
-ENV KB_DB_PATH=/data/agent-mesh.db
 EXPOSE 8084
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8084"]
