@@ -13,13 +13,13 @@ leen y **escriben** conocimiento organizado y relacionado, con acceso rápido.
 
 ## Decisiones tomadas
 
-- **Motor de grafo propio** (SQLite + FTS5 + vectores), NO el MCP `codebase-memory`
-  (es de solo lectura y su schema es code-centric; regenera su BD desde el repo).
+- **Motor de grafo = PostgreSQL en TrueNAS** (nativo de red, FTS + JSONB + `WITH RECURSIVE`
+  para recorridos, `pgvector` en fase 2). El **servicio HTTP** sigue siendo la autoridad
+  única de escritura; Postgres gestiona la concurrencia.
 - **Redis** (bus Hermes↔Mako ya existente, pi.hole:6379) como **capa de coordinación**:
   notifica a los agentes cuando el conocimiento cambia (canal `kb:changes`).
-  No es el motor de la biblioteca (sin FTS5/vectores/grafos nativos).
-- **Servicio HTTP** en el rack (Docker) como autoridad única → escrituras serializadas,
-  sin problemas de concurrencia (evita SQLite sobre NFS).
+  No es el motor de la biblioteca.
+- ~~SQLite~~ (descartado: fichero local, escritor único; para servicio en red Postgres es mejor).
 
 ## Arquitectura
 
@@ -43,11 +43,11 @@ leen y **escriben** conocimiento organizado y relacionado, con acceso rápido.
 
 ## Schema del grafo (semántico, no de código)
 
-Tablas (SQLite):
-- `nodes(id, label, name, properties JSON, text)`
-- `edges(id, type, source, target, properties JSON)`
-- `nodes_fts(...)` — FTS5 para búsqueda de texto rápida
-- `node_vectors(id, embedding BLOB)` — similaridad semántica
+Tablas (PostgreSQL):
+- `nodes(id bigserial, label text, name text, text text, properties jsonb, updated_at timestamptz)`
+- `edges(id bigserial, type text, source int, target int, properties jsonb, created_at timestamptz)`
+- FTS: índice GIN sobre `to_tsvector('spanish', label || name || text)`
+- Fase 2: `node_vectors(id, vector pgvector)` para similaridad semántica
 
 Labels de nodos: `Entidad`, `Concepto`, `Nota`, `Agente`, `Servicio`, `Skill`,
 `Proyecto`, `Persona`, `Infra`, `Lugar`.

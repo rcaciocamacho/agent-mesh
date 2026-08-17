@@ -1,0 +1,21 @@
+services:
+  agent-mesh:
+    build: ./service
+    container_name: agent-mesh
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8084:8084"
+
+  # Dev-only: Postgres desechable para validar. En producción el store es el
+  # PostgreSQL de TrueNAS (definir KB_DSN en .env). activar: --profile dev
+  postgres:
+    image: postgres:16
+    profiles: ["dev"]
+    container_name: agent-mesh-pg
+    environment:
+      POSTGRES_USER: ${KB_USER:-kb}
+      POSTGRES_PASSWORD: ${KB_PASSWORD:-kb}
+      POSTGRES_DB: ${KB_DB:-agentmesh}
+    ports:
+      - "55432:5432"
