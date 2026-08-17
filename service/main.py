@@ -58,6 +58,10 @@ class EdgeIn(BaseModel):
 async def lifespan(app: FastAPI):
     global _store
     _store = Store(DB_PATH)
+    try:
+        _store.backfill_embeddings()
+    except Exception as e:
+        print(f"[kb] ⚠️ backfill embeddings falló: {e}")
     yield
     _store.close()
 
@@ -110,6 +114,15 @@ def search(q: str = Query(...), limit: int = Query(10, ge=1, le=100),
            authorization: str | None = Header(None)):
     _check_auth(authorization)
     return {"query": q, "results": store().search(q, limit)}
+
+@app.post("/similar")
+def similar(body: dict, limit: int = Query(10, ge=1, le=100),
+            authorization: str | None = Header(None)):
+    _check_auth(authorization)
+    text = (body or {}).get("text", "").strip()
+    if not text:
+        raise HTTPException(422, "campo 'text' requerido")
+    return {"query": text, "results": store().similar(text, limit)}
 
 @app.post("/graph")
 def graph(node: int, hops: int = Query(1, ge=1, le=5), limit: int = Query(50, le=200),

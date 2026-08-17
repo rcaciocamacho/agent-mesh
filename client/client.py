@@ -72,5 +72,9 @@ class Client:
         resp = self._req("GET", f"/search?q={urllib.parse.quote(q)}&limit={limit}")
         return resp.get("results", [])
 
+    def similar(self, text: str, limit: int = 10) -> list[dict]:
+        resp = self._req("POST", f"/similar?limit={limit}", {"text": text})
+        return resp.get("results", [])
+
     def graph(self, node_id: int, hops: int = 1) -> dict:
         return self._req("POST", f"/graph?node={node_id}&hops={hops}")

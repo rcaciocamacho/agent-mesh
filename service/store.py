@@ -21,6 +21,8 @@ from contextlib import contextmanager
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from embeddings import embed, cosine
+
 _SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS nodes(
@@ -29,10 +31,12 @@ _SCHEMA = [
       name        text NOT NULL,
       text        text NOT NULL DEFAULT '',
       properties  jsonb NOT NULL DEFAULT '{}'::jsonb,
+      embedding   jsonb,
       updated_at  timestamptz NOT NULL DEFAULT now(),
       UNIQUE(label, name)
     )
     """,
+    "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS embedding jsonb",
     """
     CREATE TABLE IF NOT EXISTS edges(
       id          bigserial PRIMARY KEY,
@@ -78,14 +82,16 @@ class Store:
     def upsert_node(self, label: str, name: str, text: str = "",
                     properties: dict | None = None) -> int:
         props = json.dumps(properties or {}, ensure_ascii=False)
+        emb = json.dumps(embed(f"{label} {name} {text}"))
         with self._c() as cur:
             cur.execute(
-                "INSERT INTO nodes(label, name, text, properties, updated_at)"
-                " VALUES (%s,%s,%s,%s::jsonb, now())"
+                "INSERT INTO nodes(label, name, text, properties, embedding, updated_at)"
+                " VALUES (%s,%s,%s,%s::jsonb,%s::jsonb, now())"
                 " ON CONFLICT (label, name) DO UPDATE SET"
-                "   text=EXCLUDED.text, properties=EXCLUDED.properties, updated_at=now()"
+                "   text=EXCLUDED.text, properties=EXCLUDED.properties,"
+                "   embedding=EXCLUDED.embedding, updated_at=now()"
                 " RETURNING id",
-                (label, name, text, props))
+                (label, name, text, props, emb))
             return cur.fetchone()["id"]
 
     def get_node(self, label: str, name: str) -> dict | None:
@@ -177,6 +183,45 @@ class Store:
             cur.execute("SELECT COUNT(*) AS c FROM edges")
             e = cur.fetchone()["c"]
         return {"nodes": n, "edges": e}
+
+    # ── similaridad semántica (fase 2) ────────────────────────────────────
+    def backfill_embeddings(self) -> int:
+        """Calcula embeddings para nodos que aún no los tienen (idempotente)."""
+        with self._c() as cur:
+            cur.execute("SELECT id, label, name, text FROM nodes WHERE embedding IS NULL")
+            rows = cur.fetchall()
+            for r in rows:
+                emb = json.dumps(embed(f"{r['label']} {r['name']} {r['text']}"))
+                cur.execute("UPDATE nodes SET embedding=%s::jsonb WHERE id=%s",
+                            (emb, r["id"]))
+        return len(rows)
+
+    def similar(self, text: str, limit: int = 10) -> list[dict]:
+        """Top-N nodos más parecidos por coseno (embeddings puros, sin pgvector)."""
+        q = embed(text)
+        with self._c() as cur:
+            cur.execute("SELECT id, label, name, text, embedding FROM nodes "
+                        "WHERE embedding IS NOT NULL")
+            rows = cur.fetchall()
+        scored = []
+        for r in rows:
+            ev = r["embedding"]
+            if isinstance(ev, str):
+                try:
+                    ev = json.loads(ev)
+                except Exception:
+                    continue
+            if not isinstance(ev, list) or not ev:
+                continue
+            sim = cosine(q, ev)
+            scored.append((sim, r))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out = []
+        for sim, r in scored[:limit]:
+            row = self._node(r)
+            row["score"] = round(sim, 4)
+            out.append(row)
+        return out
 
     # ── helpers ────────────────────────────────────────────────────────────
     @staticmethod

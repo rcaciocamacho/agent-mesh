@@ -47,7 +47,11 @@ Tablas (PostgreSQL):
 - `nodes(id bigserial, label text, name text, text text, properties jsonb, updated_at timestamptz)`
 - `edges(id bigserial, type text, source int, target int, properties jsonb, created_at timestamptz)`
 - FTS: índice GIN sobre `to_tsvector('spanish', label || name || text)`
-- Fase 2: `node_vectors(id, vector pgvector)` para similaridad semántica
+- Similaridad semántica (fase 2): `embedding jsonb` en `nodes` con **embeddings
+  puros en Python** (hashing-trick sobre n-gramas → vector de 192d, coseno).
+  Sin dependencias ni API externa; funciona ya. Escala: cuando el corpus crezca,
+  migrar a la extensión **pgvector** nativa (misma dim, operador `<=>`), SIN
+  tocar a los clientes.
 
 Labels de nodos: `Entidad`, `Concepto`, `Nota`, `Agente`, `Servicio`, `Skill`,
 `Proyecto`, `Persona`, `Infra`, `Lugar`.
@@ -63,7 +67,7 @@ Tipos de edge: `RELACIONADO_CON`, `USADO_POR`, `CONECTADO_A`, `GESTIONA`,
 | PUT | `/e/{type}` | Upsert edge `{source, target}` |
 | DELETE | `/n/{label}/{name}` | Borrar nodo (y sus edges) |
 | GET | `/search?q=` | Búsqueda FTS5 (top-N) |
-| POST | `/similar` | Búsqueda por embeddings |
+| POST | `/similar` | Búsqueda por similitud (embeddings, coseno) |
 | POST | `/graph` | Vecinos / recorrido a N saltos |
 | GET | `/schema` | Labels + edge types actuales |
 | GET | `/health` | Salud del servicio |
@@ -87,8 +91,10 @@ Ingesta inicial desde lo que Hermes maneja hoy:
 
 ## Riesgos / pendientes
 
-- **Embeddings**: ¿local (sentence-transformers) o API externa? (para `POST /similar`)
-  → decisión pendiente; si no, MVP arranca solo con FTS5.
+- **Embeddings**: resueltos en fase 2 con **embeddings puros en Python**
+  (deterministas, offline, sin API externa). pgvector nativo queda como camino
+  de escala para cuando el corpus sea grande (instalar `postgresql-17-pgvector`
+  en TrueNAS).
 - **Redis ¿siempre disponible?**: si cae, el servicio sigue funcionando (solo pierde avisos).
 - **Auth multi-agente**: token único por ahora; permitir varios roles más adelante.
 - **Visibilidad**: repo y servicio **privados** (contienen IPs del rack y datos personales).
