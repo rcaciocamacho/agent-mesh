@@ -1,0 +1,13 @@
+# Agent-Mesh — artefactos locales / secretos
+.env
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+*.log
+dist/
+build/
