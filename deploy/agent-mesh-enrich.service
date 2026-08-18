@@ -1,0 +1,14 @@
+[Unit]
+Description=agent-mesh: re-ejecuta enrich.py cuando alguien persiste conocimiento (kb:seeded)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/usuario/Desarrollo/Repositorios/agent-mesh/.venv/bin/python /home/usuario/Desarrollo/Repositorios/agent-mesh/scripts/enrich_listener.py
+WorkingDirectory=/home/usuario/Desarrollo/Repositorios/agent-mesh
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target
