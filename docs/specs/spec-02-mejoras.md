@@ -48,11 +48,15 @@ Autor: spec vía Redis (canal agents) + análisis/implementación Hermes
      - Hermes local (Lenovo): `.env` del repo → KB_TOKEN=hermes-local.
      - JARVIS (Lenovo): `jarvisbrain/config/api_keys.json` → kb_base/kb_token;
        plugin `agent_mesh` lee de api_keys.json (patrón llm_client.py) antes del env.
-     - Hermes rack / Mako: token registrado en el servicio; pendiente de config
-       cuando sus listeners del MateBook (`stars-trello`) integren la KB (hoy
-       usan solo Redis).
-   - Verificado: audit_log identifica `jarvis` y `hermes-local` en escrituras;
-     legacy sigue operativo (compatibilidad).
+     - Hermes rack (MateBook): `stars-trello/kb_bridge.py` + hermes_listener.py
+       (NUEVO — el unit hermes-listener.service apuntaba a un script inexistente
+       y estaba en auto-restart) con token hermes-rack desde ~/.openclaw/kb_config.json.
+     - Mako (MateBook): `stars-trello/listen_agents.py` integra kb_bridge con token mako.
+     - Ambos listeners responden por Telegram al supergrupo activo
+       (-1003995338844; el chat_id viejo -5427554034 daba 400 Bad Request).
+   - Verificado: audit_log identifica `jarvis`, `hermes-local`, `mako` y
+     `hermes-rack` en escrituras; legacy sigue operativo (compatibilidad).
+     kb_state vía Redis: ambos agentes responden 230/384.
 
 5. **F5 — Optimistic locking** (BAJA, punto 4)
    - `nodes.version` (bigint, ++ en cada upsert) + `if_match` en el body del PUT.
