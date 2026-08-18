@@ -128,8 +128,11 @@ def main() -> int:
     load_env()
     try:
         import redis
+        # timeouts explícitos: redis-py 8.x puede colgarse en el SUBSCRIBE si
+        # no se fijan (visto en MateBook con python3.14 + user-site).
         r = redis.Redis.from_url(os.environ.get("KB_REDIS_URL", DEFAULT_REDIS),
-                                 decode_responses=True)
+                                 decode_responses=True,
+                                 socket_connect_timeout=10, socket_timeout=10)
         r.ping()
     except Exception as e:
         print(f"[enrich] ❌ Redis inalcanzable: {e}")
