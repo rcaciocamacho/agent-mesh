@@ -36,18 +36,21 @@ entorno Python:
 import sys; sys.path.insert(0, "<...>/agent-mesh/client")
 from client import Client
 
-kb = Client("http://<rack-host>:8084", token="<KB_TOKEN>")
+# base_url acepta UNA url o VARIAS separadas por coma (failover F4):
+# prueba en orden y conmuta solo ante errores de conexión.
+kb = Client("http://192.168.0.45:8084,http://192.168.0.26:18085", token="<KB_TOKEN>")
 kb.schema()                                   # labels + edge types disponibles
 kb.search("presencia jarvis", limit=10)       # búsqueda full-text (FTS)
 kb.similar("frase/idea", limit=10)            # similaridad semántica por coseno
 kb.graph(node_id, hops=2)                     # vecinos / recorrido del grafo
 ```
 
-Base URL y token (`KB_BASE`, `KB_TOKEN`) viven en `agent-mesh/.env` (el mismo valor lo
-usa el servicio del MateBook). **El token es OBLIGATORIO desde fase 2**: sin
-`Authorization: Bearer <token>` el servicio responde 401 (excepto `/health`, abierto
-para monitoreo). Si no se puede alcanzar el servicio, **degradar con elegancia**: usa la
-memoria local y anota que la KB no estaba disponible.
+Base URL y token (`KB_BASE`, `KB_TOKEN`) viven en `~/Desarrollo/Repositorios/agent-mesh/.env`
+(comparten el mismo valor el servicio del MateBook y este perfil). **El token es
+OBLIGATORIO desde fase 2**: sin `Authorization: Bearer <token>` el servicio responde 401
+(excepto `/health`, que queda abierto para monitoreo). Si no se puede alcanzar el
+servicio, **degradar con elegancia**: usa la memoria local y anota que la KB no estaba
+disponible.
 
 ## Cómo escribir (hechos compartibles)
 Solo escribe hechos **durables y relevantes para otros agentes** (infra, servicios, IPs,
@@ -68,8 +71,9 @@ kb.upsert_edge("GESTIONA", ruben["id"], jarvis["id"])
 ## Pitfalls
 - **No duplicar**: antes de escribir, `search()` para ver si el hecho ya existe (upsert por label+name).
 - **No volcar nada privado/no compartible** sin necesidad: es una base compartida por varios agentes.
-- **Auth (obligatoria)**: desde fase 2, todos los endpoints salvo `/health` exigen
-  `Authorization: Bearer <token>` (en `agent-mesh/.env`, `KB_TOKEN`). 401 = token ausente/mal.
+- **Auth (obligatoria)**: desde fase 2 el servicio exige `Authorization: Bearer <token>`
+  en todos los endpoints salvo `/health`. Un 401 = token ausente/mal. El token está en
+  `agent-mesh/.env` (`KB_TOKEN`).
 - **Disponibilidad**: si el servicio cae, no bloquees; degrada a memoria local y avisa.
 - Para migrar/mantener la semilla: `python scripts/seed.py` desde el repo (ingiere MEMORY/USER/skills).
 
