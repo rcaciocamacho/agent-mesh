@@ -1,6 +1,6 @@
 # Spec 02 — Mejoras propuestas para agent-mesh (plan de ejecución)
 
-Fecha: 2026-08-18 · Estado: implementado en `main` (pendiente despliegue en rack)
+Fecha: 2026-08-18 · Estado: **IMPLEMENTADO, DESPLEGADO Y VERIFICADO** en el rack (MateBook primario + Dreamfyre backup/LB + TrueNAS + pi.hole)
 Autor: spec vía Redis (canal agents) + análisis/implementación Hermes
 
 > El archivo original referenciado (`log-chat-agent/specs/02-mejoras-agent-mesh.md`)
@@ -103,6 +103,8 @@ Verificación realizada el 2026-08-18 (scripts/smoke_test.sh):
 
 ## Compatibilidad
 
-- `client/client.py` NO se toca (API pública de Hermes/Mako/JARVIS intacta).
+- `client/client.py` mantiene su API pública; ahora `base_url` acepta UNA url
+  o VARIAS separadas por coma (failover F4): conmuta solo ante errores de
+  conexión, nunca ante respuestas HTTP válidas (401/404/409).
 - Auth legacy (KB_TOKEN único) sigue funcionando si no se define KB_TOKENS.
 - Sin `ttl_seconds`/`if_match` el comportamiento es idéntico al anterior.

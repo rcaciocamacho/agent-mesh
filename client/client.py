@@ -11,6 +11,14 @@ Uso:
     kb.upsert_edge("RELACIONADO_CON", s, t)
     kb.search("presencia jarvis")
     kb.graph(node_id)
+
+Failover (F4 spec 02): base_url acepta UNA url o VARIAS separadas por coma
+    kb = Client("http://192.168.0.45:8084,http://192.168.0.26:18085", token="...")
+Cada petición prueba las bases EN ORDEN y conmuta a la siguiente solo ante
+errores de CONEXIÓN (red caída, timeout, servidor apagado). Las respuestas
+HTTP válidas (incluido 401/404/409) NO disparan failover: el servicio está
+vivo, el error es de la petición. Si todas las bases fallan, se lanza el
+error de la primera.
 """
 
 from __future__ import annotations
@@ -20,25 +28,47 @@ import urllib.error
 import urllib.request
 
 class Client:
-    def __init__(self, base_url: str, token: str = "", timeout: float = 10.0):
-        self.base = base_url.rstrip("/")
+    def __init__(self, base_url: str | list[str], token: str = "",
+                 timeout: float = 10.0):
+        # acepta string con una URL, string con comas (varias), o lista
+        if isinstance(base_url, str):
+            bases = [b.strip() for b in base_url.split(",") if b.strip()]
+        else:
+            bases = list(base_url)
+        if not bases:
+            raise ValueError("base_url vacío")
+        self.bases = [b.rstrip("/") for b in bases]
         self.token = token
         self.timeout = timeout
 
     # ── bajo nivel ─────────────────────────────────────────────────────────
     def _req(self, method: str, path: str, payload=None) -> dict:
-        url = f"{self.base}{path}"
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         headers = {"Content-Type": "application/json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                return json.loads(r.read().decode("utf-8") or "{}")
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "ignore")
-            raise RuntimeError(f"HTTP {e.code} en {method} {path}: {body}") from e
+
+        first_err: Exception | None = None
+        for base in self.bases:
+            url = f"{base}{path}"
+            req = urllib.request.Request(url, data=data, headers=headers, method=method)
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    return json.loads(r.read().decode("utf-8") or "{}")
+            except urllib.error.HTTPError as e:
+                # respuesta HTTP válida (401/404/409/...): el servicio está
+                # vivo → NO conmutar, devolver el error de esta base
+                body = e.read().decode("utf-8", "ignore")
+                raise RuntimeError(f"HTTP {e.code} en {method} {path}: {body}") from e
+            except Exception as e:
+                # error de conexión → intentar la siguiente base
+                if first_err is None:
+                    first_err = e
+                continue
+        # todas las bases fallaron por conexión
+        raise RuntimeError(
+            f"sin conexión a agent-mesh ({len(self.bases)} base(s)): {first_err}"
+        ) from first_err
 
     # ── API pública ────────────────────────────────────────────────────────
     def health(self) -> dict:
