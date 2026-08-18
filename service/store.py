@@ -38,7 +38,10 @@ class Store:
     """Graph + full-text + vectores sobre PostgreSQL (pool de conexiones)."""
 
     def __init__(self, dsn: str):
-        self.pool = ConnectionPool(dsn, min_size=1, max_size=8, open=False)
+        # row_factory=dict_row desde el pool: todas las conexiones (incluidas
+        # las de apply_migrations) devuelven dicts con claves por nombre.
+        self.pool = ConnectionPool(dsn, min_size=1, max_size=8, open=False,
+                                   kwargs={"row_factory": dict_row})
         self.pool.open()
         with self.pool.connection() as conn:
             # F0: aplicar migraciones versionadas (idempotente)

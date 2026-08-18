@@ -53,14 +53,20 @@ Autor: spec vía Redis (canal agents) + análisis/implementación Hermes
    - Redis: XADD a `kb:changes:stream` (maxlen 1000) además del pub/sub actual
      (los listeners tardíos no pierden eventos). Aditivo, no rompe nada.
    - Validación de schema cubierta por F0 (migraciones).
-   - Backup: `scripts/backup_kb.sh` (pg_dump) — pendiente de crear.
+   - Backup: `scripts/backup_kb.sh` (pg_dump + rotación, creado y verificado).
 
-7. **F4 — SPOF MateBook** (MEDIA, punto 2) — **requiere decisión de Rubén**
-   - El servicio solo corre en el MateBook. Opciones:
-     a) systemd `Restart=always` + healthcheck (mínimo, barato)
-     b) segundo nodo (p.ej. Dreamfyre) con el mismo contenedor + LB
-     c) Docker Swarm/K8s en el rack (sobredimensionado para uso personal)
-   - Pendiente de decisión; NO implementado aún.
+7. **F4 — SPOF MateBook** (MEDIA, punto 2) — **implementado (2º nodo + LB)**
+   - Modelo: **primario = MateBook** (192.168.0.45:8084, contenedor existente);
+     **backup = Dreamfyre** (192.168.0.26) con el mismo contenedor en :18084.
+     nginx LB en Dreamfyre :18085 (upstream primario + backup, health pasivo
+     `max_fails=3 fail_timeout=15s`: si el MateBook cae, conmuta solo).
+   - Ambos nodos escriben en el MISMO PostgreSQL (TrueNAS) → cero pérdida,
+     failover transparente (verificado: escribir vía A y leer vía B tras
+     matar A).
+   - `deploy/f4/` contiene docker-compose.yml + lb.conf para Dreamfyre.
+   - El nodo backup lleva `KB_TTL_SWEEP=0` (el barrendero solo corre en el
+     primario, evita purgas duplicadas).
+   - Dockerfile ahora respeta `KB_PORT` (permite variar el puerto por nodo).
 
 ## Estado de implementación
 
@@ -72,7 +78,7 @@ Autor: spec vía Redis (canal agents) + análisis/implementación Hermes
 | F3 tokens+audit | ✅ store + main (KB_TOKENS) | smoke test (401/200 + audit por agente) |
 | F5 optimistic locking | ✅ version + if_match | smoke test (409) |
 | F6 streams + backup | ✅ XADD aditivo + `scripts/backup_kb.sh` | smoke test (stream XRANGE + dump/rotación) |
-| F4 SPOF | ⏳ propuesta (decisión de Rubén) | — |
+| F4 SPOF | ✅ 2º nodo Dreamfyre :18084 + nginx LB :18085 (`deploy/f4/`) | failover real verificado (matar primario → conmuta a backup) |
 
 Verificación realizada el 2026-08-18 (scripts/smoke_test.sh):
 - Sin pgvector (postgres:16): migración 002 `skipped`, fail-soft coseno OK.

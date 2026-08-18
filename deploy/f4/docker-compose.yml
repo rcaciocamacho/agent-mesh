@@ -1,0 +1,39 @@
+# F4 — segundo nodo de agent-mesh en Dreamfyre (192.168.0.26) + LB nginx.
+#
+# Modelo: primario = MateBook (192.168.0.45:8084, el contenedor existente);
+# backup  = este nodo (Dreamfyre). El LB escucha en :18085 y enruta al primario;
+# si el MateBook cae, nginx conmuta solo al backup (misma BD TrueNAS → cero pérdida).
+#
+# Despliegue (en Dreamfyre):
+#   git clone git@github.com:usuario/agent-mesh.git ~/agent-mesh
+#   cd ~/agent-mesh/deploy/f4
+#   cp ../../.env.example .env && rellena KB_DSN/KB_TOKEN/KB_REDIS_URL
+#   docker compose up -d --build
+#
+# Verificación: curl http://192.168.0.26:18085/health
+#   → si el MateBook está vivo, responde 192.168.0.45; si no, este nodo.
+#
+# Nota: el 8084 de Dreamfyre está ocupado (bactatrack) → el nodo usa 18084
+# interno:8084, y el LB usa 18085 (ambos libres, verificado 2026-08-18).
+services:
+  agent-mesh:
+    build: ../../service
+    container_name: agent-mesh-node2
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # este nodo es backup: no necesita su propio barrendero TTL
+      KB_TTL_SWEEP: "0"
+    ports:
+      - "18084:8084"
+
+  kb-lb:
+    image: nginx:alpine
+    container_name: kb-lb
+    restart: unless-stopped
+    depends_on:
+      - agent-mesh
+    ports:
+      - "18085:80"
+    volumes:
+      - ./lb.conf:/etc/nginx/conf.d/default.conf:ro

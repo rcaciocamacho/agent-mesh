@@ -9,4 +9,4 @@ COPY main.py store.py migrations.py embeddings.py ./
 
 EXPOSE 8084
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8084"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${KB_PORT:-8084}"]
