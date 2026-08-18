@@ -145,19 +145,24 @@ def main() -> int:
         return 0
 
     print(f"[enrich] demonio a la escucha en '{CHANNEL}' ...")
-    pubsub = r.pubsub()
-    pubsub.subscribe(CHANNEL)
-    try:
-        for msg in pubsub.listen():
-            if msg.get("type") != "message":
-                continue
-            process_payload(msg.get("data", ""))
-            drain_list(r)                  # limpiar acumulados pendientes
-    except KeyboardInterrupt:
-        print("[enrich] saliendo (Ctrl+C)")
-    finally:
-        pubsub.unsubscribe()
-    return 0
+    while True:
+        try:
+            pubsub = r.pubsub()
+            pubsub.subscribe(CHANNEL)
+            for msg in pubsub.listen():
+                if msg.get("type") != "message":
+                    continue
+                process_payload(msg.get("data", ""))
+                drain_list(r)              # limpiar acumulados pendientes
+        except redis.exceptions.TimeoutError:
+            # un timeout puntual (p.ej. tras un enrich largo) NO debe matar el
+            # demonio: se re-suscribe y se sigue escuchando.
+            print("[enrich] ⚠️ timeout puntual en pubsub — re-suscribiendo")
+        except KeyboardInterrupt:
+            print("[enrich] saliendo (Ctrl+C)")
+            return 0
+        except Exception as e:
+            print(f"[enrich] ⚠️ error en bucle ({e}) — re-suscribiendo")
 
 if __name__ == "__main__":
     raise SystemExit(main())
