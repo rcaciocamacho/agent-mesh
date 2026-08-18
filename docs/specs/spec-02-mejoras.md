@@ -39,10 +39,20 @@ Autor: spec vía Redis (canal agents) + análisis/implementación Hermes
    - El TTL se aplica SOLO cuando el cliente lo pide (`ttl_seconds`); el
      conocimiento durable (sin ttl) nunca expira.
 
-4. **F3 — Token por agente + audit** (MEDIA, punto 3)
-   - `KB_TOKENS={"agente":"token",...}` en .env (gana a KB_TOKEN legacy).
-   - Tablas `agents` (token_hash → agente) y `audit_log` (agente, acción,
-     detalle, ts). Cada escritura (node/edge/conversation) queda auditada.
+4. **F3 — Token por agente + audit** (MEDIA, punto 3) — **DESPLEGADO 2026-08-18**
+   - `KB_TOKENS={"agente":"token",...}` en .env de ambos nodos (gana a KB_TOKEN legacy).
+   - Tablas `agents` (token_hash → agente) y `audit_log` (agente, acción, detalle, ts).
+   - Tokens generados: `hermes-local`, `hermes-rack`, `mako`, `jarvis` + alias `legacy`
+     (token histórico, mantenido para no romper clientes sin migrar).
+   - Clientes configurados:
+     - Hermes local (Lenovo): `.env` del repo → KB_TOKEN=hermes-local.
+     - JARVIS (Lenovo): `jarvisbrain/config/api_keys.json` → kb_base/kb_token;
+       plugin `agent_mesh` lee de api_keys.json (patrón llm_client.py) antes del env.
+     - Hermes rack / Mako: token registrado en el servicio; pendiente de config
+       cuando sus listeners del MateBook (`stars-trello`) integren la KB (hoy
+       usan solo Redis).
+   - Verificado: audit_log identifica `jarvis` y `hermes-local` en escrituras;
+     legacy sigue operativo (compatibilidad).
 
 5. **F5 — Optimistic locking** (BAJA, punto 4)
    - `nodes.version` (bigint, ++ en cada upsert) + `if_match` en el body del PUT.
