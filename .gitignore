@@ -11,3 +11,8 @@ node_modules/
 *.log
 dist/
 build/
+
+# backups locales de .env NUNCA al repo
+deploy/**/.env
+deploy/**/.env.*
+.env.*

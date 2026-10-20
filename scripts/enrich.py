@@ -26,7 +26,7 @@ HUBS = [
     ("Servicio", "agent-mesh", "Knowledge graph compartido de los agentes (Hermes/Mako/JARVIS); servicio en MateBook :8084, PostgreSQL TrueNAS, Redis kb:changes."),
     ("Servicio", "UniWebAdmin", "Gestor del hotel (reportes, empleados, conciliación) bajo UniWebAdmin; repo y despliegue gestionados por Rubén."),
     ("Servicio", "Lodestone", "Hub de logs con IA del homelab (notification-hub); app en MateBook :8200, Gotify."),
-    ("Infra", "TrueNAS", "NAS del homelab (192.168.0.20): almacenamiento + PostgreSQL 17 (base agentmesh del knowledge graph)."),
+    ("Infra", "TrueNAS", "NAS del homelab (192.168.0.21): almacenamiento + PostgreSQL 17 (base agentmesh del knowledge graph)."),
     ("Infra", "MateBook", "Portátil 192.168.0.45 del homelab: ejecuta agent-mesh (Docker :8084) y Lodestone (:8200)."),
     ("Infra", "Redis-pihole", "Bus Redis del homelab (pi.hole 192.168.0.46:6379, sin pass): coordinación agentes (canal agents) + kb:changes."),
     ("Servicio", "Navidrome", "Servidor de música del homelab (primario para Rubén); YouTube solo para descargas."),
@@ -53,7 +53,7 @@ def main() -> int:
                     help="DSN opcional para matching exhaustivo (leer todos los nodos).")
     args = ap.parse_args()
     kb = Client(args.base, args.token)
-    print(f"→ service: {kb.base}  health: {kb.health()}")
+    print(f"→ service: {kb.bases}  health: {kb.health()}")
 
     # 1) hubs
     hub_ids = {}
