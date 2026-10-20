@@ -67,7 +67,7 @@ agent-mesh/
 
 Cómo nació y qué resuelve agent-mesh, explicado de corrido:
 
-**[agent-mesh: de codebase-memory a biblioteca compartida](https://raicesbinarias.es/articulos/agent-mesh-de-codebase-memory-a-biblioteca-compartida)**
+**[agent-mesh: de codebase-memory a biblioteca compartida](https://raicesbinarias.es/articulos/agent-mesh-de-codebase-memory-a-biblioteca-compartida/)**
 
 Publicado en [raicesbinarias.es](https://raicesbinarias.es/).
 
