@@ -63,5 +63,16 @@ agent-mesh/
 └── .env.example
 ```
 
+## Artículo
+
+Cómo nació y qué resuelve agent-mesh, explicado de corrido:
+
+**[agent-mesh: de codebase-memory a biblioteca compartida](https://raicesbinarias.es/articulos/agent-mesh-de-codebase-memory-a-biblioteca-compartida)**
+
+Publicado en [raicesbinarias.es](https://raicesbinarias.es/).
+
+---
+
 ## 📄 Licencia
-MIT © usuario — uso personal homelab.
+MIT — uso personal homelab.
+

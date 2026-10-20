@@ -41,7 +41,7 @@ def main() -> int:
         ("Hermes-config-kanban",
          "Kanban: auto_decompose=true (descomposición automática de tareas)."),
         ("Hermes-config-mcp",
-         "MCP: servidor codebase_memory habilitado (binary /home/usuario/.local/bin/codebase-memory-mcp)."),
+         "MCP: servidor codebase_memory habilitado (binary ~/.local/bin/codebase-memory-mcp)."),
         ("Hermes-config-voz",
          "Voz Hermes: speech-to-text local (faster-whisper) y text-to-speech edge. "
          "Se controla con /voice on|tts|off."),

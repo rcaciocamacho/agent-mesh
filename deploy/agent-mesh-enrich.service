@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/home/usuario/Desarrollo/Repositorios/agent-mesh/.venv/bin/python -u /home/usuario/Desarrollo/Repositorios/agent-mesh/scripts/enrich_listener.py
-WorkingDirectory=/home/usuario/Desarrollo/Repositorios/agent-mesh
+ExecStart=%h/Desarrollo/Repositorios/agent-mesh/.venv/bin/python -u %h/Desarrollo/Repositorios/agent-mesh/scripts/enrich_listener.py
+WorkingDirectory=%h/Desarrollo/Repositorios/agent-mesh
 Restart=always
 RestartSec=15
 

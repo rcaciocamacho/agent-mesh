@@ -9,7 +9,7 @@ KEY=~/.ssh/id_ed25519
 TOKEN_CMD="grep ^KB_TOKEN= ~/Desarrollo/Repositorios/agent-mesh/deploy/f4/.env | cut -d= -f2-"
 
 run_dream() {
-  ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 usuario@"$DREAM" "$1"
+  ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${DEPLOY_USER:-$USER}@"$DREAM" "$1"
 }
 
 echo "== 1. leer nodo de prueba via LB (con token leído en Dreamfyre) =="
@@ -17,7 +17,7 @@ run_dream 'TOKEN='"$TOKEN_CMD"'; curl -s "http://127.0.0.1:18085/search?q=failov
 echo
 
 echo "== 2. MATAR primario (MateBook agent-mesh) =="
-ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=8 usuario@"$MATE" "docker stop agent-mesh" && echo "  primario parado"
+ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=8 ${DEPLOY_USER:-$USER}@"$MATE" "docker stop agent-mesh" && echo "  primario parado"
 
 echo "== 3. esperar 20s (fail_timeout=15s) a que nginx conmute =="
 sleep 20
@@ -29,7 +29,7 @@ run_dream 'curl -s http://127.0.0.1:18085/health'
 echo
 
 echo "== 5. restaurar primario =="
-ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=8 usuario@"$MATE" "docker start agent-mesh" && echo "  primario arrancado"
+ssh -i "$KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=8 ${DEPLOY_USER:-$USER}@"$MATE" "docker start agent-mesh" && echo "  primario arrancado"
 sleep 8
 echo "== 6. health final (debe volver el primario) =="
 run_dream 'curl -s http://127.0.0.1:18085/health'
