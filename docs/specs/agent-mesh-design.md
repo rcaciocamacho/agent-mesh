@@ -11,6 +11,10 @@ con quién hable el usuario, la información de la que se nutren sea exactamente
 No es un indexador de código: es una **biblioteca viva semántica** donde los agentes
 leen y **escriben** conocimiento organizado y relacionado, con acceso rápido.
 
+> *Los nombres de los agentes que aparecen en este documento son los de **nuestro** montaje
+> (casa + rack) y van **como ejemplo**: Agent-Mesh es **agnóstico** — funciona con cualquier
+> conjunto de agentes que compartan el mismo grafo.*
+
 ## Decisiones tomadas
 
 - **Motor de grafo = PostgreSQL en TrueNAS** (nativo de red, FTS + JSONB + `WITH RECURSIVE`

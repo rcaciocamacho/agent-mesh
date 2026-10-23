@@ -3,6 +3,10 @@
 > Biblioteca de **conocimiento viva y compartida** para los agentes del homelab (Hermes local,
 > Hermes rack, **Mako**, JARVIS). Independientemente de con quién hables, la información de la
 > que se nutren es **exactamente la misma**: una sola fuente de verdad en forma de grafo.
+>
+> *Los nombres de los agentes que aparecen en este README son los de **nuestro** montaje
+> (casa + rack) y van **como ejemplo**: Agent-Mesh es **agnóstico** — funciona con cualquier
+> conjunto de agentes que compartan el mismo grafo.*
 
 ## ✨ Características
 - **Knowledge graph compartido** vía un servicio HTTP único (nodos + edges semánticos).
