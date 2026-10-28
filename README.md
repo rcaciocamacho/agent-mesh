@@ -18,12 +18,12 @@
 
 ## 🏗️ Arquitectura
 ```
-                ┌──────────────────────────┐
+                ┌─────────────────────────-─┐
  Hermes local ─►│        agent-mesh         │
- Hermes rack ──►│  Servicio HTTP (Docker)  │──► PostgreSQL (TrueNAS)
- Mako ─────────►│  FastAPI :8084           │     nodos/edges/jsonb/FTS
- JARVIS ───────►│  Auth: Bearer KB_TOKEN   │
-                └───────────┬──────────────┘
+ Hermes rack ──►│  Servicio HTTP (Docker)   │──► PostgreSQL (TrueNAS)
+ OpenClaw -────►│  FastAPI :8084            │     nodos/edges/jsonb/FTS
+ JARVIS Hermes ►│  Auth: Bearer KB_TOKEN    │
+                └───────────┬─────────────-─┘
                             │ pub/sub "kb:changes"
                             ▼
                      Redis (bus del homelab)
