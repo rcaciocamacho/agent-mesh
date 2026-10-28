@@ -221,6 +221,10 @@ class Store:
                f" FROM nodes WHERE {_fts_expr()} @@ plainto_tsquery('spanish', %s)"
                f" ORDER BY rank DESC, updated_at DESC LIMIT %s")
         with self._c() as cur:
+            # Con ~1000 filas el planificador prefiere Seq Scan y recalcula
+            # to_tsvector de cada nodo (6-12 s medidos). El índice GIN hace la
+            # misma búsqueda en ~0,7 s: se fuerza solo para esta consulta.
+            cur.execute("SET LOCAL enable_seqscan = off")
             cur.execute(sql, (q, q, limit))
             return [self._node(r) for r in cur.fetchall()]
 
