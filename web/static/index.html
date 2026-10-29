@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent-mesh — explorador del grafo</title>
 <script src="/static/cytoscape.min.js"></script>
+<script src="/static/layout-base.js"></script>
+<script src="/static/cose-base.js"></script>
+<script src="/static/cytoscape-fcose.js"></script>
 <style>
   :root{
     --bg:#0d1117; --panel:#151b24; --panel2:#1b2430; --line:#243040;
-    --text:#e6edf3; --dim:#8b98a8; --accent:#4ea1ff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+    --text:#e6edf3; --dim:#8b98a8; --accent:#4ea1ff; --ok:#3fb950; --bad:#f85149;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
@@ -23,7 +26,6 @@
     border:1px solid var(--line);color:var(--dim);white-space:nowrap}
   .pill.ok{color:var(--ok);border-color:#1c3d26}
   .pill.bad{color:var(--bad);border-color:#4a2020}
-  header .spacer{flex:1}
 
   main{flex:1;display:flex;min-height:0}
 
@@ -61,8 +63,11 @@
   .graphwrap{flex:1;position:relative;min-width:0;background:
     radial-gradient(circle at 30% 20%,#141c26 0,#0d1117 70%)}
   #cy{position:absolute;inset:0}
-  .toolbar{position:absolute;top:12px;left:12px;z-index:5;display:flex;gap:6px;flex-wrap:wrap}
-  .toolbar button{padding:6px 10px;font-size:12px;background:rgba(21,27,36,.92);backdrop-filter:blur(6px)}
+  .toolbar{position:absolute;top:12px;left:12px;z-index:5;display:flex;gap:6px;flex-wrap:wrap;
+    align-items:center;max-width:calc(100% - 380px)}
+  .toolbar button,.toolbar select{padding:6px 10px;font-size:12px;
+    background:rgba(21,27,36,.94);backdrop-filter:blur(6px)}
+  .toolbar select{padding:5px 6px}
   .legend{position:absolute;bottom:12px;left:12px;z-index:5;display:flex;gap:10px;
     flex-wrap:wrap;font-size:11px;color:var(--dim);background:rgba(21,27,36,.85);
     padding:7px 10px;border-radius:8px;border:1px solid var(--line);max-width:60%}
@@ -72,17 +77,21 @@
     z-index:6;background:rgba(21,27,36,.97);border:1px solid var(--line);border-radius:12px;
     padding:14px;overflow-y:auto;display:none;backdrop-filter:blur(8px)}
   .detail.on{display:block}
-  .detail h2{font-size:14px;margin:6px 0 2px;line-height:1.3}
+  .detail h2{font-size:14px;margin:6px 0 2px;line-height:1.3;padding-right:22px}
   .detail .meta{font-size:11px;color:var(--dim);margin-bottom:10px}
   .detail pre{white-space:pre-wrap;word-break:break-word;font:11.5px/1.5 ui-monospace,monospace;
-    color:#c3d0dd;background:#0f151d;padding:9px;border-radius:8px;max-height:260px;overflow:auto}
-  .detail .close{position:absolute;top:10px;right:10px;padding:2px 8px;font-size:13px}
+    color:#c3d0dd;background:#0f151d;padding:9px;border-radius:8px;max-height:240px;overflow:auto}
+  .detail .close{position:absolute;top:9px;right:9px;padding:2px 8px;font-size:13px}
   .detail .rels{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 10px}
   .detail .rels span{font-size:10.5px;padding:2px 7px;border-radius:999px;
     background:#1d3326;color:#7fd08f;border:1px solid #21402c}
+  .detail .relrow{display:flex;gap:6px;align-items:baseline;font-size:11.5px;
+    padding:3px 0;border-bottom:1px solid #1d2733;cursor:pointer}
+  .detail .relrow:hover{color:#fff}
+  .detail .dir{color:#4ea1ff;font-family:ui-monospace,monospace;flex:0 0 auto}
 
-  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    background:rgba(13,17,23,.55);z-index:9;font-size:13px;color:var(--dim);display:none}
+  .loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(13,17,23,.55);z-index:9;font-size:13px;color:var(--dim)}
   .loading.on{display:flex}
   .spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);
     border-radius:50%;animation:sp .7s linear infinite;margin-right:9px}
@@ -90,8 +99,9 @@
 
   @media (max-width:820px){
     main{flex-direction:column}
-    aside{width:100%;flex:0 0 46%;border-right:none;border-bottom:1px solid var(--line)}
+    aside{width:100%;flex:0 0 44%;border-right:none;border-bottom:1px solid var(--line)}
     .detail{width:calc(100% - 24px)}
+    .toolbar{max-width:calc(100% - 24px)}
   }
 </style>
 </head>
@@ -100,7 +110,6 @@
 <header>
   <h1>agent-mesh <span>· explorador del grafo</span></h1>
   <span class="pill" id="health">conectando…</span>
-  <span class="pad"></span>
   <div style="flex:1"></div>
   <span class="pill" id="counter">0 nodos · 0 aristas</span>
 </header>
@@ -137,8 +146,16 @@
     <div id="cy"></div>
     <div class="toolbar">
       <button id="fit" title="Ajustar vista">Ajustar</button>
-      <button id="relayout">Reordenar</button>
+      <button id="relayout" title="Recalcular toda la disposición">Reordenar</button>
+      <select id="layoutSel" title="Tipo de disposición">
+        <option value="fcose" selected>fuerza</option>
+        <option value="concentric">concéntrico</option>
+        <option value="breadthfirst">jerárquico</option>
+        <option value="circle">círculo</option>
+        <option value="grid">cuadrícula</option>
+      </select>
       <button id="hopsBtn" title="Profundidad al expandir">vecinos: 1 salto</button>
+      <button id="labelsBtn" title="Mostrar los tipos de relación">relaciones: off</button>
     </div>
     <div class="legend" id="legend"></div>
     <div class="detail" id="detail">
@@ -156,59 +173,81 @@ const COLORS = {
   Blog:"#e3b341", PropuestaBlog:"#bf8700", default:"#7d8590"
 };
 const LABELS = ["Agente","Infra","Servicio","Memoria","Persona","Preferencia","Skill","Spec","Blog","PropuestaBlog"];
+const HAS_FCOSE = typeof window.cytoscapeFcose !== "undefined";
+
+const $ = id => document.getElementById(id);
+const state = { hops:1, results:[], labels:false };
 
 const cy = cytoscape({
-  container: document.getElementById("cy"),
+  container: $("cy"),
   wheelSensitivity: 0.2,
+  minZoom: 0.05, maxZoom: 3,
+  boxSelectionEnabled: false,
   style: [
     { selector:"node", style:{
         "background-color":"data(color)",
         "label":"data(shortName)",
-        "color":"#c8d4e0","font-size":10,"text-valign":"bottom","text-margin-y":5,
+        "color":"#cdd9e5","font-size":10,"text-valign":"bottom","text-margin-y":5,
         "text-outline-width":2,"text-outline-color":"#0d1117",
-        "width":"data(size)","height":"data(size)","border-width":1.5,"border-color":"#0d1117"
+        "text-wrap":"ellipsis","text-max-width":"88px","min-zoomed-font-size":7,
+        "width":"data(size)","height":"data(size)",
+        "border-width":1.5,"border-color":"#0d1117"
     }},
+    { selector:"node.hub", style:{"border-width":2.5,"border-color":"#4a6580"} },
     { selector:"node.root", style:{"border-width":3,"border-color":"#4ea1ff"} },
     { selector:"node:selected", style:{"border-width":3,"border-color":"#ffffff"} },
     { selector:"edge", style:{
-        "width":1.2,"line-color":"#2b3a4d","target-arrow-color":"#2b3a4d",
-        "target-arrow-shape":"triangle","curve-style":"bezier","arrow-scale":.7,"opacity":.85
+        "width":1.1,"line-color":"#2f3f52","target-arrow-color":"#2f3f52",
+        "target-arrow-shape":"triangle","curve-style":"bezier",
+        "arrow-scale":.65,"opacity":.75
     }},
-    { selector:"edge[type]", style:{"label":"data(type)","font-size":8,"color":"#5d6b7c",
-        "text-rotation":"autorotate","text-margin-y":-6,"text-opacity":0.9}},
-    { selector:"edge.hl", style:{"line-color":"#4ea1ff","target-arrow-color":"#4ea1ff","width":2,"opacity":1}}
+    { selector:"edge[?bidirectional]", style:{"source-arrow-shape":"triangle",
+        "source-arrow-color":"#2f3f52"} },
+    { selector:"edge[?multi]", style:{"width":1.8,"line-color":"#3c5069",
+        "target-arrow-color":"#3c5069"} },
+    { selector:"edge[label]", style:{
+        "label":"data(label)","font-size":8,"color":"#8595a8",
+        "text-rotation":"autorotate","text-margin-y":-6,
+        "text-opacity":0,"min-zoomed-font-size":11,
+        "text-outline-width":2,"text-outline-color":"#0d1117",
+        "text-background-color":"#0d1117","text-background-opacity":0.75,
+        "text-background-padding":2}},
+    { selector:"edge.showlabels", style:{"text-opacity":0.95} },
+    { selector:"edge:selected", style:{"line-color":"#4ea1ff",
+        "target-arrow-color":"#4ea1ff","source-arrow-color":"#4ea1ff","width":2.4,"opacity":1} },
+    { selector:".dim", style:{"opacity":0.12}},
+    { selector:"node.dim", style:{"text-opacity":0.05}}
   ],
   layout: { name:"preset" }
 });
 
-let state = { hops:1, results:[], selId:null };
-const $ = id => document.getElementById(id);
-
+/* ── utilidades ────────────────────────────────────────── */
 function setLoading(on){ $("loading").classList.toggle("on", on); }
 function colorOf(label){ return COLORS[label] || COLORS.default; }
-function short(name, n=26){
+function short(name, n=24){
   name = (name||"").replace(/\s+/g," ").trim();
   return name.length > n ? name.slice(0,n-1)+"…" : name;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function updateCounter(){
+  const n = cy.nodes().length, e = cy.edges().length;
+  const base = $("counter").dataset.base || "";
+  $("counter").textContent = `${n} nodos · ${e} aristas` + (base ? ` · ${base}` : "");
 }
 
 /* ── salud ─────────────────────────────────────────────── */
 async function loadHealth(){
   const el = $("health");
   try{
-    const r = await fetch("/api/health");
-    const d = await r.json();
+    const d = await (await fetch("/api/health")).json();
     if (d.status === "ok"){
-      el.className = "pill ok";
-      el.textContent = "KB online";
-      $("counter").textContent = `${d.nodes ?? "?"} nodos · ${d.edges ?? "?"} aristas`;
-    } else {
-      el.className = "pill bad";
-      el.textContent = "KB caída";
-      $("counter").textContent = "—";
-    }
-  }catch(e){
-    el.className = "pill bad"; el.textContent = "sin conexión";
-  }
+      el.className = "pill ok"; el.textContent = "KB online";
+      $("counter").dataset.base = `${d.nodes ?? "?"} en la KB`;
+    } else { el.className = "pill bad"; el.textContent = "KB caída"; }
+  }catch(e){ el.className = "pill bad"; el.textContent = "sin conexión"; }
+  updateCounter();
 }
 loadHealth(); setInterval(loadHealth, 60000);
 
@@ -224,13 +263,14 @@ async function doSearch(){
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || "error");
     state.results = d.results || [];
-    renderResults(d.mode);
+    renderResults();
   }catch(e){
     $("results").innerHTML = `<div class="empty">Error: ${escapeHtml(e.message)}</div>`;
+    $("plot").disabled = true;
   }finally{ setLoading(false); }
 }
 
-function renderResults(mode){
+function renderResults(){
   const box = $("results");
   $("plot").disabled = state.results.length === 0;
   if(!state.results.length){
@@ -238,73 +278,208 @@ function renderResults(mode){
     return;
   }
   box.innerHTML = state.results.map((n,i)=>{
-    const score = (n.score !== undefined && n.score !== null)
-      ? n.score : (n.rank !== undefined ? n.rank.toFixed(2) : "");
-    return `<div class="card" data-id="${n.id}" data-i="${i}">
+    const s = n.score ?? n.rank;
+    const sc = (s === undefined || s === null) ? "" : Number(s).toFixed(2);
+    return `<div class="card" data-i="${i}">
       <div class="top">
         <span class="lab" style="color:${colorOf(n.label)}">${escapeHtml(n.label||"")}</span>
         <span class="nm" title="${escapeHtml(n.name||"")}">${escapeHtml(n.name||"")}</span>
-        <span class="sc">${score !== "" ? (typeof score==="number"? score.toFixed(2):score) : ""}</span>
+        <span class="sc">${sc}</span>
       </div>
       <div class="txt">${escapeHtml((n.text||"").slice(0,220))}</div>
     </div>`;
   }).join("");
 
   box.querySelectorAll(".card").forEach(c=>{
-    c.addEventListener("click", ()=> {
+    c.addEventListener("click", ()=>{
       const n = state.results[+c.dataset.i];
-      addNode(n, true);
-      expand(n.id);
+      const node = addNode(n, true);
       showDetail(n);
       box.querySelectorAll(".card").forEach(x=>x.classList.remove("sel"));
       c.classList.add("sel");
+      // colocar el nodo en el centro de la vista si es nuevo
+      if(cy.nodes().length === 1) cy.center(node);
+      expand(n.id);
     });
-    c.addEventListener("dblclick", ()=> expandNode(+c.dataset.id));
   });
 }
 
-/* ── grafo ─────────────────────────────────────────────── */
+/* ── grafo: nodos y aristas ────────────────────────────── */
 function addNode(n, isRoot){
   const id = String(n.id);
-  if(cy.getElementById(id).length) {
-    if(isRoot) cy.getElementById(id).addClass("root");
-    return cy.getElementById(id);
+  const existing = cy.getElementById(id);
+  if(existing.length){
+    if(isRoot) existing.addClass("root");
+    return existing;
   }
-  return cy.add({
+  const node = cy.add({
     data:{
-      id, name:n.name||("nodo "+n.id), shortName: short(n.name||("nodo "+n.id)),
+      id, name:n.name||("nodo "+n.id),
+      shortName: short(n.name||("nodo "+n.id)),
       label:n.label||"", color: colorOf(n.label),
       size: isRoot ? 26 : 18,
       text:n.text||"", props:n.properties||{}
     },
     classes: isRoot ? "root" : ""
   });
+  if(!isRoot && node.degree() > 6) node.addClass("hub");
+  node.scratch({ fresh:true });
+  return node;
 }
+
+/* Una sola arista por par de nodos. Los tipos se acumulan en la etiqueta.
+   Antes se creaban 4 aristas superpuestas entre el mismo par y eso era
+   justo lo que emborronaba el centro del mapa. */
+function pairKey(a,b){ return a < b ? a+"|"+b : b+"|"+a; }
 
 function addEdge(src, tgt, type){
-  const a=String(src), b=String(tgt);
+  const a = String(src), b = String(tgt);
+  if(a === b) return;
   if(!cy.getElementById(a).length || !cy.getElementById(b).length) return;
-  const id = `${a}->${b}:${type}`;
-  const rev = `${b}->${a}:${type}`;
-  if(cy.getElementById(id).length || cy.getElementById(rev).length) return;
-  cy.add({ data:{ id, source:a, target:b, type } });
+
+  const id = "e:" + pairKey(a,b);
+  const found = cy.getElementById(id);
+
+  if(found.length){
+    const e = found;
+    const types = e.data("types") || [];
+    if(!types.includes(type)){
+      types.push(type);
+      e.data({
+        types,
+        label: types.join(" · "),
+        multi: types.length > 1
+      });
+    }
+    if(e.data("source") !== a) e.data("bidirectional", true);
+    return;
+  }
+
+  cy.add({ data:{
+    id, source:a, target:b, type, types:[type], label:type,
+    multi:false, bidirectional:false
+  }});
 }
 
+/* ── expansión ─────────────────────────────────────────── */
 async function expand(nodeId){
   setLoading(true);
+  const before = new Set(cy.nodes().map(n=>n.id()));
   try{
     const r = await fetch(`/api/expand?node=${nodeId}&hops=${state.hops}&limit=60`);
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail||"error");
+
     (d.neighbors||[]).forEach(nb=>{
       addNode(nb,false);
-      (nb.relations||["RELACIONADO_CON"]).forEach(rel=> addEdge(nodeId, nb.id, rel));
+      (nb.relations||["RELACIONADO_CON"]).forEach(rel => addEdge(nodeId, nb.id, rel));
     });
-    runLayout();
+
+    const added = cy.nodes().filter(n=>!before.has(n.id()));
+    if(added.length){
+      placeNear(nodeId, added);
+      refineLayout(added.length < 25);
+    }
+    updateCounter();
   }catch(e){ console.warn(e); }
   finally{ setLoading(false); }
 }
 
+/* Coloca los nodos nuevos en anillos alrededor del padre para que el mapa
+   no dé un salto cada vez que expandes. */
+function placeNear(parentId, nodes){
+  const p = cy.getElementById(String(parentId));
+  if(!p.length) return;
+  const base = p.position();
+  const count = nodes.length;
+  const ring = 130 + Math.min(count, 12) * 6;
+  nodes.forEach((n,i)=>{
+    const ang = (2*Math.PI*i)/count - Math.PI/2;
+    const r = ring + (i % 2 ? 34 : 0);
+    n.position({ x: base.x + Math.cos(ang)*r, y: base.y + Math.sin(ang)*r });
+  });
+}
+
+/* ── disposición ───────────────────────────────────────── */
+function layoutOptions(name, randomize){
+  const n = cy.nodes().length;
+  const dense = n > 120;
+  switch(name){
+    case "fcose":
+      if(HAS_FCOSE) return {
+        name:"fcose",
+        quality: n > 400 ? "draft" : (n > 150 ? "default" : "proof"),
+        randomize, animate:true, animationDuration:650, animationEasing:"ease-out",
+        fit:true, padding:60,
+        nodeSeparation: dense ? 120 : 90,
+        nodeRepulsion: dense ? 16000 : 10000,
+        idealEdgeLength: dense ? 150 : 110,
+        edgeElasticity: 0.4,
+        nestingFactor: 0.1,
+        gravity: dense ? 0.18 : 0.12,
+        numIter: dense ? 1200 : 2500,
+        initialTemp: 220, coolingFactor: 0.95, minTemp: 1.0,
+        samplingType:true, sampleSize: 30,
+        packComponents:true, tile:true,
+        nodeDimensionsIncludeLabels:true,
+        uniformNodeDimensions:false
+      };
+      return layoutOptions("cose", randomize);
+    case "cose":
+      return { name:"cose", randomize, animate:true, animationDuration:650,
+        nodeRepulsion: dense?18000:12000, idealEdgeLength: dense?160:120,
+        edgeElasticity:200, gravity: dense?0.5:0.25, numIter:2000,
+        nodeOverlap:20, fit:true, padding:60, componentSpacing:120 };
+    case "concentric":
+      return { name:"concentric", fit:true, padding:60, animate:true,
+        animationDuration:600, minNodeSpacing: dense?45:70, avoidOverlap:true,
+        concentric: n => n.degree(),
+        levelWidth: () => n.count() > 40 ? 2 : 3 };
+    case "breadthfirst":
+      return { name:"breadthfirst", directed:true, fit:true, padding:60,
+        animate:true, animationDuration:600, spacingFactor:1.35, avoidOverlap:true,
+        grid:true, circle:false };
+    case "circle":
+      return { name:"circle", fit:true, padding:60, animate:true, spacingFactor:1.5 };
+    case "grid":
+      return { name:"grid", fit:true, padding:60, animate:true, avoidOverlap:true };
+    default:
+      return { name:"preset" };
+  }
+}
+
+/* Construye el layout con red de seguridad: si el plugin no está registrado
+   de verdad (no basta con que window.cytoscapeFcose exista), cae a cose. */
+function safeLayout(opts, fallback){
+  try{
+    return cy.layout(opts);
+  }catch(e){
+    console.warn(`layout "${opts.name}" no disponible (${e.message}); uso ${fallback||"cose"}`);
+    return cy.layout(layoutOptions(fallback || "cose", true));
+  }
+}
+
+function runLayout(name){
+  const sel = name || $("layoutSel").value;
+  const l = safeLayout(layoutOptions(sel, true), "cose");
+  l.one("layoutstop", updateCounter);
+  l.run();
+}
+
+/* Repaso suave tras expandir: mantiene las posiciones y solo desenreda. */
+function refineLayout(animate){
+  if(cy.nodes().length < 3) return;
+  if(!HAS_FCOSE){ cy.layout(layoutOptions("cose", false)).run(); return; }
+  const opts = layoutOptions("fcose", false);
+  opts.animate = !!animate;
+  opts.animationDuration = 500;
+  opts.numIter = 800;
+  opts.fit = true;
+  opts.padding = 70;
+  safeLayout(opts, "cose").run();
+}
+
+/* ── graficar resultados ───────────────────────────────── */
 async function plotResults(){
   if(!state.results.length) return;
   const ids = state.results.map(n=>n.id).join(",");
@@ -324,70 +499,123 @@ async function plotResults(){
   }finally{ setLoading(false); }
 }
 
-function runLayout(){
-  const n = cy.nodes().length;
-  cy.layout({
-    name: n > 60 ? "cose" : "cose",
-    animate: n < 200, animationDuration: 600, randomize: true,
-    nodeRepulsion: 9000, idealEdgeLength: 110, gravity: 0.25,
-    nodeOverlap: 12, numIter: 1200
-  }).run();
-}
-
 /* ── detalle ───────────────────────────────────────────── */
 function showDetail(n){
-  state.selId = n.id;
-  const node = cy.getElementById(String(n.id));
-  let rels = [];
-  if(node.length) rels = node.connectedEdges().map(e=>e.data("type"));
-  rels = [...new Set(rels)];
+  const id = String(n.id);
+  const node = cy.getElementById(id);
+  const types = node.length
+    ? [...new Set(node.connectedEdges().map(e=>e.data("type")).filter(Boolean))]
+    : [];
+
   $("dbody").innerHTML = `
     <span class="lab" style="color:${colorOf(n.label)}">${escapeHtml(n.label||"")}</span>
     <h2>${escapeHtml(n.name||"")}</h2>
-    <div class="meta">id ${n.id}${n.score!==undefined?` · similitud ${Number(n.score).toFixed(3)}`:""}</div>
-    ${rels.length?`<div class="rels">${rels.map(r=>`<span>${escapeHtml(r)}</span>`).join("")}</div>`:""}
+    <div class="meta">id ${id}${n.score!==undefined && n.score!==null
+      ? ` · similitud ${Number(n.score).toFixed(3)}` : ""}</div>
+    ${types.length ? `<div class="rels">${types.map(r=>`<span>${escapeHtml(r)}</span>`).join("")}</div>` : ""}
+    ${Array.isArray(n.relations) && n.relations.length ? `
+      <div class="meta">relaciones (${n.relations.length})</div>
+      <div id="drels">${n.relations.map(r=>`
+        <div class="relrow" data-go="${r.id}">
+          <span class="dir">${r.direction === "out" ? "→" : "←"}</span>
+          <span style="color:#8fb3d9">${escapeHtml(r.type)}</span>
+          <span style="color:#8896a6">${escapeHtml(r.label||"")}</span>
+          <span>${escapeHtml(r.name||"")}</span>
+        </div>`).join("")}</div>` : ""}
+    <div class="meta" style="margin-top:10px">texto</div>
     <pre>${escapeHtml((n.text||"(sin texto)").slice(0,4000))}</pre>
     ${n.properties && Object.keys(n.properties).length
-      ? `<div class="meta" style="margin-top:10px">propiedades</div>
+      ? `<div class="meta">propiedades</div>
          <pre>${escapeHtml(JSON.stringify(n.properties,null,2).slice(0,1500))}</pre>` : ""}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button id="dexp" style="flex:1;font-size:12px">Expandir vecinos</button>
     </div>`;
+
   $("detail").classList.add("on");
-  $("dexp").onclick = ()=> expand(n.id);
+  $("dexp").onclick = ()=> expand(id);
+  $("dbody").querySelectorAll(".relrow").forEach(row=>{
+    row.onclick = ()=>{
+      const go = row.dataset.go;
+      const target = cy.getElementById(go);
+      if(target.length){
+        cy.elements().removeClass("dim");
+        target.addClass("dim").removeClass("dim");
+        cy.animate({ center:{ eles: target }, zoom: Math.max(cy.zoom(), 0.9) }, { duration:350 });
+        target.select();
+        fetchNode(go);
+      }
+    };
+  });
+}
+
+async function fetchNode(id){
+  setLoading(true);
+  try{
+    const r = await fetch(`/api/node?id=${encodeURIComponent(id)}`);
+    if(!r.ok) throw new Error("no encontrado");
+    const n = await r.json();
+    showDetail(n);
+  }catch(e){ console.warn(e); }
+  finally{ setLoading(false); }
 }
 
 /* ── eventos ───────────────────────────────────────────── */
 $("go").onclick = doSearch;
 $("q").addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
 $("plot").onclick = plotResults;
-$("clear").onclick = ()=>{ cy.elements().remove(); $("detail").classList.remove("on"); };
-$("fit").onclick = ()=> cy.fit(cy.elements(), 60);
-$("relayout").onclick = runLayout;
+$("clear").onclick = ()=>{ cy.elements().remove(); $("detail").classList.remove("on"); updateCounter(); };
+$("fit").onclick = ()=> cy.animate({ fit:{ eles: cy.elements(), padding:70 } }, { duration:400 });
+$("relayout").onclick = ()=> runLayout();
+$("layoutSel").onchange = ()=> runLayout();
 $("dclose").onclick = ()=> $("detail").classList.remove("on");
+
 $("hopsBtn").onclick = ()=>{
-  state.hops = state.hops >= 2 ? 1 : state.hops + 1;
+  state.hops = state.hops >= 3 ? 1 : state.hops + 1;
   $("hopsBtn").textContent = `vecinos: ${state.hops} salto${state.hops>1?"s":""}`;
 };
 
-cy.on("tap","node", evt=>{
+$("labelsBtn").onclick = ()=>{
+  state.labels = !state.labels;
+  cy.edges().toggleClass("showlabels", state.labels);
+  $("labelsBtn").textContent = `relaciones: ${state.labels ? "on" : "off"}`;
+};
+
+/* resaltar vecindario al pasar el ratón: la mejor forma de leer un grafo denso */
+let hoverTimer = null;
+cy.on("mouseover", "node", evt=>{
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(()=>{
+    const el = evt.target;
+    const keep = el.closedNeighborhood();
+    cy.elements().addClass("dim");
+    keep.removeClass("dim");
+    el.removeClass("dim");
+  }, 60);
+});
+cy.on("mouseout", "node", ()=>{
+  clearTimeout(hoverTimer);
+  cy.elements().removeClass("dim");
+});
+
+cy.on("tap", "node", evt=>{
   const d = evt.target.data();
-  showDetail({ id:+d.id, label:d.label, name:d.name, text:d.text, properties:d.props });
-  evt.target.connectedEdges().addClass("hl");
-  setTimeout(()=> evt.target.connectedEdges().removeClass("hl"), 1400);
+  showDetail({ id:Number(d.id), label:d.label, name:d.name,
+               text:d.text, properties:d.props });
+});
+
+cy.on("dblclick", "node", evt=>{
+  expand(evt.target.id());
 });
 
 $("legend").innerHTML = LABELS.map(l=>
   `<span><i style="background:${colorOf(l)}"></i>${l}</span>`).join("");
 
-// arranque: muestra el grafo de los hubs si no hay búsqueda
-(function boot(){
-  $("q").value = "";
-})();
+document.addEventListener("keydown", e=>{
+  if(e.key === "Escape") $("detail").classList.remove("on");
+});
 
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
+updateCounter();
+if(!HAS_FCOSE) console.warn("cytoscape-fcose no cargó; se usará cose");
 </script>
 </body>
 </html>
