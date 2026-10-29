@@ -8,6 +8,7 @@
 <script src="/static/layout-base.js"></script>
 <script src="/static/cose-base.js"></script>
 <script src="/static/cytoscape-fcose.js"></script>
+<script src="/static/marked.min.js"></script>
 <style>
   :root{
     --bg:#0d1117; --panel:#151b24; --panel2:#1b2430; --line:#243040;
@@ -93,6 +94,76 @@
   .detail .meta{font-size:11px;color:var(--dim);margin-bottom:10px}
   .detail pre{white-space:pre-wrap;word-break:break-word;font:11.5px/1.5 ui-monospace,monospace;
     color:#c3d0dd;background:#0f151d;padding:9px;border-radius:8px;max-height:240px;overflow:auto}
+
+  /* ── lector de ficha de nodo (texto, sin grafo) ─────────── */
+  .reader{position:absolute;inset:0;z-index:7;background:var(--bg);overflow-y:auto;
+    display:none;padding:0 0 70px}
+  .reader.on{display:block}
+  .reader .rbar{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;
+    padding:10px 26px;background:rgba(13,17,23,.96);border-bottom:1px solid var(--line);
+    backdrop-filter:blur(6px)}
+  .reader .rbar .sp{flex:1}
+  .reader .rbar button{font-size:12px;padding:6px 11px}
+  .reader .rhead{max-width:940px;margin:22px auto 16px;padding:0 26px}
+  .reader .rhead .kicker{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .reader .rhead h1{font-size:20px;line-height:1.28;margin:0 0 10px;word-break:break-word}
+  .reader .rmeta{display:flex;gap:6px;flex-wrap:wrap;font-size:11.5px;color:var(--dim)}
+  .reader .rmeta span{background:var(--panel2);border:1px solid var(--line);
+    padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .reader .toc{max-width:880px;margin:0 auto 20px;padding:12px 14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px}
+  .reader .toc b{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--dim);margin-bottom:7px}
+  .reader .toc a{display:inline-block;font-size:12.5px;color:#8fc0f0;text-decoration:none;
+    padding:3px 8px;border-radius:6px;cursor:pointer}
+  .reader .toc a:hover{background:var(--panel2);color:#fff}
+  .reader .toc a.sub{font-size:12px;color:#9db4cc;padding-left:16px}
+  .reader .toc a.lv2{font-weight:600;color:#a8d0f5}
+  .reader .toc a.lv3{font-size:12px;color:#9db4cc;padding-left:16px}
+
+  .reader article{max-width:880px;margin:0 auto;padding:0 26px;
+    font-size:13.5px;line-height:1.68;color:#d7e2ec;word-break:break-word}
+  .reader article h1{font-size:18px;margin:26px 0 10px;color:#fff}
+  .reader article h2{font-size:15.5px;margin:26px 0 9px;padding-bottom:6px;
+    border-bottom:1px solid #1e2836;color:#fff;letter-spacing:.1px}
+  .reader article h3{font-size:13.6px;margin:19px 0 6px;color:#9ecbff;font-weight:600}
+  .reader article h4{font-size:13px;margin:15px 0 5px;color:#b9cbe0}
+  .reader article p{margin:0 0 11px}
+  .reader article ul,.reader article ol{margin:0 0 13px;padding-left:23px}
+  .reader article li{margin:4px 0}
+  .reader article li::marker{color:#4ea1ff}
+  .reader article strong{color:#fff;font-weight:650}
+  .reader article em{color:#c9d8e8}
+  .reader article code{background:#0b1017;border:1px solid #1e2836;border-radius:4px;
+    padding:1px 5px;font:12px ui-monospace,SFMono-Regular,monospace;color:#a5d6ff}
+  .reader article pre{background:#0b1017;border:1px solid #1e2836;border-radius:8px;
+    padding:11px 13px;overflow:auto;margin:0 0 13px}
+  .reader article pre code{border:0;background:none;padding:0;font-size:11.8px;line-height:1.55}
+  .reader article blockquote{border-left:3px solid #2a6aa8;margin:0 0 13px;
+    padding:3px 0 3px 13px;color:#9fb4c8}
+  .reader article table{border-collapse:collapse;width:100%;margin:0 0 13px;font-size:12.5px}
+  .reader article th,.reader article td{border:1px solid #1e2836;padding:5px 9px;text-align:left}
+  .reader article th{background:var(--panel2);color:#fff}
+  .reader article a{color:var(--accent)}
+  .reader article hr{border:0;border-top:1px solid var(--line);margin:20px 0}
+
+  .reader .sec{max-width:880px;margin:24px auto 0;padding:0 26px}
+  .reader .sec h4{font-size:11px;text-transform:uppercase;letter-spacing:.7px;
+    color:var(--dim);margin:0 0 9px;font-weight:600}
+  .reader .props{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;
+    gap:5px 16px;font-size:12.5px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px}
+  .reader .props .k{color:#8fa8c0;font-family:ui-monospace,monospace;font-size:11.5px}
+  .reader .props .v{color:#e6edf3;white-space:pre-wrap;word-break:break-word}
+  .reader .relgroup{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .reader .relchip{display:inline-flex;align-items:baseline;gap:7px;font-size:12px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+    padding:4px 11px;cursor:pointer;transition:.12s}
+  .reader .relchip:hover{border-color:var(--accent);background:#1d2a38}
+  .reader .relchip .t{font-size:10.5px;color:#8fb3d9;letter-spacing:.3px}
+  .reader .relchip .d{color:#6f7f91;font-size:11px}
+  .reader .warn{max-width:880px;margin:0 auto 14px;padding:9px 13px;font-size:12px;
+    border:1px solid #4a3a1a;background:#241d0e;color:#e3b341;border-radius:8px}
   .detail .close{position:absolute;top:9px;right:9px;padding:2px 8px;font-size:13px}
   .detail .rels{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 10px}
   .detail .rels span{font-size:10.5px;padding:2px 7px;border-radius:999px;
@@ -212,6 +283,17 @@
       <div id="dbody"></div>
     </div>
     <div class="loading" id="loading"><div class="spin"></div>consultando la KB…</div>
+
+    <div class="reader" id="reader">
+      <div class="rbar">
+        <button id="rback" title="Volver">← volver</button>
+        <span class="pill" id="rlab"></span>
+        <span class="sp"></span>
+        <button id="rgraph" title="Dibujar el ego-grafo de este nodo">ver en el grafo</button>
+        <button id="rcopy" title="Copiar el texto del nodo">copiar texto</button>
+      </div>
+      <div id="rbody"></div>
+    </div>
   </section>
 </main>
 
@@ -692,11 +774,209 @@ function renderNodeResults(d){
   });
 }
 
-/* Abre un nodo: dibuja su ego-grafo, lo centra y enseña la ficha completa. */
+/* Abre un nodo en el LECTOR de texto (sin grafo: la ficha es para leer).
+   El ego-grafo queda como acción explícita desde la barra del lector. */
 async function openNode(id, opts){
   opts = opts || {};
-  await renderEgo(id, opts.hops);
-  await fetchNode(id);
+  state.currentNode = Number(id);
+  $("reader").classList.add("on");
+  $("rbody").innerHTML = `<div class="empty">cargando ficha…</div>`;
+  $("reader").scrollTop = 0;
+  setLoading(true);
+  try{
+    const r = await fetch(`/api/node?id=${encodeURIComponent(id)}`);
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || "no encontrado");
+    renderReader(d);
+  }catch(e){
+    $("rbody").innerHTML =
+      `<div class="sec"><div class="empty">No se pudo abrir: ${escapeHtml(e.message)}</div></div>`;
+  }finally{ setLoading(false); }
+}
+
+/* ── lector de ficha ───────────────────────────────────────
+   Los textos de la KB no traen markdown real: traen encabezados
+   incrustados tipo "ESTADO 2026-10-29 10:51 UTC: ...". Los detecto y los
+   convierto en titulos de verdad para que la ficha se pueda ojear. */
+const HEAD_SKIP = /^\s*([-*+]|\d+\.)\s/;
+
+function asHeading(line){
+  if(HEAD_SKIP.test(line)) return null;
+  const s = line.trim();
+  if(!s) return null;
+
+  /* El separador es el ":" que cierra el encabezado (seguido de espacio o
+     fin de linea). Se permiten los dos puntos entre digitos para no partir
+     horas: "10:51" no es un separador, "UTC:" si. */
+  const m = s.match(/^((?:[^:：]|\d[:：]\d){3,110})[:：](?=\s|$)\s*(.*)$/);
+  if(!m) return null;
+  const head = m[1].trim();
+  const rest = m[2].trim();
+  if(!head) return null;
+
+  const firstWord = (head.match(/^[^\s]+/) || [""])[0]
+    .replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g, "");
+  if(firstWord.length < 2) return null;
+  // la primera palabra en mayusculas es la senal fuerte de titulo
+  if(firstWord !== firstWord.toUpperCase()) return null;
+
+  // titulo suelto (linea que acaba en ":") -> seccion de primer nivel
+  if(!rest) return { head, rest: "", level: 2 };
+
+  // titulo con cuerpo en la misma linea -> subseccion
+  if(head.split(/\s+/).length > 14) return null;
+  const letters = head.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g, "");
+  if(letters.length < 3) return null;
+  const uppers = head.replace(/[^A-ZÁÉÍÓÚÑÜ]/g, "").length;
+  // con cuerpo detras exigimos mayoria de mayusculas en el titulo
+  if(uppers / letters.length < 0.5) return null;
+  return { head, rest, level: 3 };
+}
+
+function slugify(s, used){
+  let base = s.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  if(!base) base = "seccion";
+  let slug = base, i = 2;
+  while(used.has(slug)){ slug = base + "-" + i++; }
+  used.add(slug);
+  return slug;
+}
+
+/* Pasa el texto a markdown: escapa HTML crudo, sube los encabezados
+   incrustados a ### y devuelve tambien el indice de secciones. */
+function textToMarkdown(raw){
+  const safe = String(raw || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/<(?=[a-zA-Z\/!])/g, "&lt;");
+
+  const lines = safe.split("\n");
+  const out = [];
+  const toc = [];
+  const used = new Set();
+  let inFence = false;
+
+  for(const line of lines){
+    if(/^\s*```/.test(line)){ inFence = !inFence; out.push(line); continue; }
+    if(inFence){ out.push(line); continue; }
+    const h = asHeading(line);
+    if(h){
+      const slug = slugify(h.head, used);
+      toc.push({ level: h.level, text: h.head, slug });
+      out.push("", `${h.level === 2 ? "##" : "###"} ${h.head}`, "");
+      if(h.rest) out.push(h.rest, "");
+    }else{
+      out.push(line);
+    }
+  }
+
+  const md = out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  let html = "";
+  try{
+    html = (window.marked && marked.parse)
+      ? marked.parse(md, { gfm:true, breaks:false })
+      : `<pre>${escapeHtml(md)}</pre>`;
+  }catch(e){
+    console.warn("markdown fallo", e);
+    html = `<pre>${escapeHtml(md)}</pre>`;
+  }
+  return { html, toc };
+}
+
+function renderReader(n){
+  const text = n.text || "";
+  state.currentText = text;
+  const { html, toc } = textToMarkdown(text);
+  const props = (n.properties && typeof n.properties === "object") ? n.properties : {};
+  const rels = Array.isArray(n.relations) ? n.relations : [];
+
+  $("rlab").textContent = n.label || "nodo";
+  $("rlab").style.color = colorOf(n.label);
+
+  const chips = [`id ${n.id}`];
+  if(n.version !== undefined && n.version !== null) chips.push(`v${n.version}`);
+  if(n.updated_at) chips.push("act. " + String(n.updated_at).replace("T", " ").slice(0, 16));
+  chips.push(`${text.length.toLocaleString("es-ES")} car.`);
+  chips.push(`${rels.length} relación${rels.length === 1 ? "" : "es"}`);
+
+  const tocHtml = toc.length > 1 ? `
+    <div class="toc">
+      <b>en esta ficha · ${toc.length} secciones</b>
+      ${toc.map(t=>`<a data-head="${escapeHtml(t.text)}" class="lv${t.level}">${escapeHtml(t.text)}</a>`).join("")}
+    </div>` : "";
+
+  const propsHtml = Object.keys(props).length ? `
+    <div class="sec">
+      <h4>propiedades</h4>
+      <div class="props">
+        ${Object.entries(props).map(([k,v])=>`
+          <div class="k">${escapeHtml(k)}</div>
+          <div class="v">${escapeHtml(
+            typeof v === "object" ? JSON.stringify(v) : String(v))}</div>`).join("")}
+      </div>
+    </div>` : `
+    <div class="sec"><h4>propiedades</h4>
+      <div class="hint">Este nodo no tiene propiedades.</div></div>`;
+
+  let relsHtml = "";
+  if(rels.length){
+    const byType = new Map();
+    for(const r of rels){
+      const key = r.type || "RELACIONADO_CON";
+      if(!byType.has(key)) byType.set(key, []);
+      byType.get(key).push(r);
+    }
+    relsHtml = `
+      <div class="sec">
+        <h4>relaciones (${rels.length})</h4>
+        ${[...byType.entries()].map(([type, list])=>`
+          <div class="relgroup">
+            <span class="t" style="color:#8fb3d9;font-size:11px;min-width:130px">${escapeHtml(type)}</span>
+            ${list.map(r=>`
+              <span class="relchip" data-go="${r.id}" title="${escapeHtml(r.label||"")} ${escapeHtml(r.name||"")}">
+                <span class="d">${r.direction === "out" ? "→" : "←"}</span>
+                <span>${escapeHtml(r.name || ("nodo " + r.id))}</span>
+                <span class="t">${escapeHtml(r.label||"")}</span>
+              </span>`).join("")}
+          </div>`).join("")}
+      </div>`;
+  }
+
+  const emptyNote = text.trim() ? "" :
+    `<div class="warn">Este nodo no tiene texto: solo etiqueta y relaciones.</div>`;
+
+  $("rbody").innerHTML = `
+    <div class="rhead">
+      <div class="kicker">
+        <span class="lab" style="color:${colorOf(n.label)}">${escapeHtml(n.label||"")}</span>
+      </div>
+      <h1>${escapeHtml(n.name || ("nodo " + n.id))}</h1>
+      <div class="rmeta">${chips.map(c=>`<span>${escapeHtml(c)}</span>`).join("")}</div>
+    </div>
+    ${emptyNote}
+    ${tocHtml}
+    <article>${html}</article>
+    ${propsHtml}
+    ${relsHtml}`;
+
+  // anclas del indice: enlazo por texto del encabezado, no por posicion,
+  // porque el texto original puede traer ya sus propios encabezados.
+  const heads = [...$("rbody").querySelectorAll("article h2, article h3")];
+  const norm = s => (s || "").trim().replace(/\s+/g, " ").toLowerCase();
+  $("rbody").querySelectorAll(".toc a").forEach(a=>{
+    const want = norm(a.dataset.head);
+    const el = heads.find(h => norm(h.textContent) === want);
+    a.onclick = ()=>{
+      if(el) el.scrollIntoView({ behavior:"smooth", block:"start" });
+    };
+  });
+
+  $("rbody").querySelectorAll(".relchip").forEach(chip=>{
+    chip.onclick = ()=> openNode(Number(chip.dataset.go));
+  });
+
+  $("reader").scrollTop = 0;
 }
 
 /* Ego-grafo con aristas reales (incluye las que unen a los propios vecinos). */
@@ -730,11 +1010,40 @@ async function renderEgo(id, hops){
 }
 
 /* ── eventos ───────────────────────────────────────────── */
-$("ngo").onclick = searchNodes;
-$("nq").addEventListener("keydown", e=>{ if(e.key === "Enter") searchNodes(); });
+$("ngo").onclick = searchNodes;$("nq").addEventListener("keydown", e=>{ if(e.key === "Enter") searchNodes(); });
 $("nmode").onchange = ()=>{ if($("nq").value.trim() || $("nlabel").value) searchNodes(); };
 $("nlabel").onchange = ()=>{ if($("nlabel").value || $("nq").value.trim()) searchNodes(); };
 $("nlimit").onchange = ()=>{ if($("nq").value.trim() || $("nlabel").value) searchNodes(); };
+
+/* barra del lector */
+$("rback").onclick = ()=> $("reader").classList.remove("on");
+
+$("rgraph").onclick = async ()=>{
+  const id = state.currentNode;
+  if(!id) return;
+  $("reader").classList.remove("on");
+  await renderEgo(id, state.hops);
+  $("detail").classList.remove("on");
+};
+
+$("rcopy").onclick = async ()=>{
+  const btn = $("rcopy");
+  const text = state.currentText || "";
+  if(!text){ return; }
+  try{
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "copiado ✓";
+  }catch(e){
+    // clipboard requiere contexto seguro; en http plano caemos a textarea
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand && document.execCommand("copy");
+    document.body.removeChild(ta);
+    btn.textContent = ok ? "copiado ✓" : "no se pudo";
+  }
+  setTimeout(()=>{ btn.textContent = "copiar texto"; }, 1600);
+};
 
 $("go").onclick = doSearch;
 $("q").addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
