@@ -177,6 +177,169 @@ async def subgraph(
     }
 
 
+# ── búsqueda de nodos (por nombre / contenido) ───────────────────────────
+
+
+def _connect():
+    dsn = _dsn()
+    if not dsn:
+        raise HTTPException(503, "sin KB_DSN: solo disponible el proxy al servicio")
+    try:
+        import psycopg
+        from psycopg.rows import dict_row
+    except ImportError:
+        raise HTTPException(503, "psycopg no instalado")
+    try:
+        return psycopg.connect(dsn, connect_timeout=8), dict_row
+    except Exception as exc:
+        raise HTTPException(502, f"no se pudo conectar a la KB: {exc}")
+
+
+@app.get("/api/nodes")
+async def search_nodes(
+    q: str = Query("", max_length=200),
+    label: str = Query("", max_length=60),
+    mode: str = Query("name", pattern="^(name|content|any)$"),
+    limit: int = Query(30, ge=1, le=200),
+):
+    """Busca nodos por nombre (mode=name), por el texto del contenido
+    (mode=content) o ambos (mode=any). Ordena por relevancia de nombre y luego
+    por grado de conexión, que es lo que separa el nodo bueno del homónimo.
+    """
+    q = q.strip()
+    label = label.strip()
+    if not q and not label:
+        raise HTTPException(400, "indica al menos q o label")
+
+    patterns = []
+    args: list = []
+
+    if q:
+        pat = f"%{q}%"
+        if mode == "name":
+            patterns.append("(n.name ILIKE %s)")
+            args.append(pat)
+        elif mode == "content":
+            patterns.append("(n.text ILIKE %s)")
+            args.append(pat)
+        else:
+            patterns.append("(n.name ILIKE %s OR n.text ILIKE %s)")
+            args.extend([pat, pat])
+    if label:
+        patterns.append("(n.label = %s)")
+        args.append(label)
+
+    where_sql = " AND ".join(patterns) or "TRUE"
+    # ranking: nombre exacto (3) > empieza por (2) > contiene (1)
+    rank_args = [q.lower(), q.lower() + "%"] if q else []
+    rank_sql = """
+      CASE WHEN LOWER(n.name) = %s THEN 3
+           WHEN LOWER(n.name) LIKE %s THEN 2
+           ELSE 1 END
+    """ if q else "1"
+
+    sql = f"""
+        SELECT n.id, n.label, n.name, n.updated_at, n.version,
+               LEFT(COALESCE(n.text, ''), 400) AS excerpt,
+               LENGTH(COALESCE(n.text, '')) AS text_len,
+               (SELECT COUNT(*) FROM edges e
+                 WHERE e.source = n.id OR e.target = n.id) AS degree,
+               {rank_sql} AS rank
+        FROM nodes n
+        WHERE {where_sql}
+        ORDER BY rank DESC, degree DESC, n.name
+        LIMIT %s
+    """
+    full_args = list(rank_args) + list(args) + [limit]
+
+    conn, dict_row = _connect()
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, full_args)
+            rows = cur.fetchall()
+    except Exception as exc:
+        raise HTTPException(500, f"error de consulta: {exc}")
+    finally:
+        conn.close()
+
+    for r in rows:
+        r["updated_at"] = r["updated_at"].isoformat() if r.get("updated_at") else None
+    return {"query": q, "label": label, "mode": mode, "total": len(rows), "results": rows}
+
+
+@app.get("/api/ego")
+async def ego_graph(
+    id: int = Query(..., ge=1),
+    hops: int = Query(1, ge=1, le=3),
+    limit: int = Query(120, ge=1, le=400),
+):
+    """Ego-grafo con aristas REALES.
+
+    A diferencia de /api/expand (que solo dice qué nodos son vecinos y con qué
+    tipos), aquí se devuelven las aristas concretas, incluidas las que existen
+    entre los propios vecinos. Es lo que hace legible el vecindario.
+    """
+    conn, dict_row = _connect()
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT id, label, name FROM nodes WHERE id = %s", (id,))
+            center = cur.fetchone()
+            if not center:
+                raise HTTPException(404, f"nodo {id} no existe")
+
+            walk = """
+                WITH RECURSIVE walk(hop, id, path) AS (
+                  SELECT 0, %s::bigint, ARRAY[%s::bigint]
+                  UNION ALL
+                  SELECT w.hop + 1,
+                         CASE WHEN e.source = w.id THEN e.target ELSE e.source END,
+                         w.path || (CASE WHEN e.source = w.id THEN e.target
+                                         ELSE e.source END)
+                  FROM walk w
+                  JOIN edges e ON e.source = w.id OR e.target = w.id
+                  WHERE w.hop < %s
+                    AND NOT (CASE WHEN e.source = w.id THEN e.target
+                                  ELSE e.source END) = ANY(w.path)
+                ), picked AS (
+                  SELECT DISTINCT id FROM walk LIMIT %s
+                )
+            """
+            cur.execute(
+                walk + """
+                SELECT n.id, n.label, n.name,
+                       (SELECT COUNT(*) FROM edges e2
+                         WHERE e2.source = n.id OR e2.target = n.id) AS degree
+                FROM nodes n JOIN picked p ON p.id = n.id
+                """,
+                (id, id, hops, limit))
+            nodes = cur.fetchall()
+
+            cur.execute(
+                walk + """
+                SELECT e.id, e.type, e.source, e.target
+                FROM edges e
+                JOIN picked a ON a.id = e.source
+                JOIN picked b ON b.id = e.target
+                WHERE e.source <> e.target
+                """,
+                (id, id, hops, limit))
+            edges = cur.fetchall()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"error de consulta: {exc}")
+    finally:
+        conn.close()
+
+    return {
+        "center": center,
+        "hops": hops,
+        "nodes": nodes,
+        "edges": edges,
+        "truncated": len(nodes) >= limit,
+    }
+
+
 @app.get("/api/node")
 async def node_detail(id: int = Query(..., ge=1), name: str = Query("")):
     """Detalle de un nodo por id.

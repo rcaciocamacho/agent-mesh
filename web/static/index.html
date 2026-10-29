@@ -45,6 +45,18 @@
   button:disabled{opacity:.5;cursor:not-allowed}
   .opts{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--dim)}
   .opts label{display:flex;align-items:center;gap:5px}
+  .opts select{font-size:12px;padding:5px 6px}
+
+  .tabs{display:flex;gap:6px;padding:10px 12px 0;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .tab{flex:1;font-size:12px;padding:7px 8px;background:transparent;
+    border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;color:var(--dim)}
+  .tab:hover{color:var(--text);border-color:var(--line)}
+  .tab.on{background:var(--panel2);border-color:var(--line);color:var(--text);font-weight:600}
+  .pane{flex:1;display:flex;flex-direction:column;min-height:0}
+  .pane.off{display:none}
+  .hint{font-size:11.5px;color:var(--dim);line-height:1.5}
+  .deg{font-size:10.5px;color:#8fa8c0;background:#1e2b3a;border:1px solid #2b3d52;
+    padding:1px 6px;border-radius:999px;flex:0 0 auto}
 
   .results{flex:1;overflow-y:auto;padding:8px}
   .empty{color:var(--dim);font-size:13px;padding:24px 14px;text-align:center;line-height:1.6}
@@ -116,29 +128,66 @@
 
 <main>
   <aside>
-    <div class="searchbox">
-      <div class="searchrow">
-        <input id="q" type="search" placeholder="Busca: hermes-listener, dreamfyre, glico…" autocomplete="off">
-        <button id="go" class="primary">Buscar</button>
+    <div class="tabs">
+      <button class="tab on" data-tab="sem">búsqueda semántica</button>
+      <button class="tab" data-tab="nod">ficha de nodo</button>
+    </div>
+
+    <div class="pane" id="paneSem">
+      <div class="searchbox">
+        <div class="searchrow">
+          <input id="q" type="search" placeholder="Busca: hermes-listener, dreamfyre, glico…" autocomplete="off">
+          <button id="go" class="primary">Buscar</button>
+        </div>
+        <div class="opts">
+          <label><input type="radio" name="mode" value="semantic" checked> semántica</label>
+          <label><input type="radio" name="mode" value="fts"> texto</label>
+          <span style="margin-left:auto"></span>
+          <label>top
+            <select id="limit">
+              <option>8</option><option selected>12</option><option>20</option><option>40</option>
+            </select>
+          </label>
+        </div>
+        <div class="searchrow">
+          <button id="plot" style="flex:1" disabled>Graficar resultados</button>
+          <button id="clear" title="Limpiar grafo">Limpiar</button>
+        </div>
       </div>
-      <div class="opts">
-        <label><input type="radio" name="mode" value="semantic" checked> semántica</label>
-        <label><input type="radio" name="mode" value="fts"> texto</label>
-        <span style="margin-left:auto"></span>
-        <label>top
-          <select id="limit">
-            <option>8</option><option selected>12</option><option>20</option><option>40</option>
-          </select>
-        </label>
-      </div>
-      <div class="searchrow">
-        <button id="plot" style="flex:1" disabled>Graficar resultados</button>
-        <button id="clear" title="Limpiar grafo">Limpiar</button>
+      <div class="results" id="results">
+        <div class="empty">Busca en el grafo compartido.<br>
+          Haz clic en un resultado para dibujarlo y expandir sus vecinos.</div>
       </div>
     </div>
-    <div class="results" id="results">
-      <div class="empty">Busca en el grafo compartido.<br>
-        Haz clic en un resultado para dibujarlo y expandir sus vecinos.</div>
+
+    <div class="pane off" id="paneNod">
+      <div class="searchbox">
+        <div class="searchrow">
+          <input id="nq" type="search" placeholder="Dreamfyre, glico, listener…" autocomplete="off">
+          <button id="ngo" class="primary">Buscar</button>
+        </div>
+        <div class="opts">
+          <select id="nmode" title="Dónde buscar">
+            <option value="name" selected>en el nombre</option>
+            <option value="content">en el contenido</option>
+            <option value="any">en ambos</option>
+          </select>
+          <select id="nlabel" title="Filtrar por etiqueta">
+            <option value="">todas</option>
+          </select>
+          <span style="margin-left:auto"></span>
+          <label>top
+            <select id="nlimit">
+              <option>20</option><option selected>30</option>
+              <option>50</option><option>100</option>
+            </select>
+          </label>
+        </div>
+        <div class="hint">Ordenado por relevancia y luego por conexiones. Haz clic en una ficha para ver el contenido completo y su ego-grafo.</div>
+      </div>
+      <div class="results" id="nresults">
+        <div class="empty">Sin búsqueda todavía.<br>Escribe un nombre o deja el campo vacío y elige una etiqueta.</div>
+      </div>
     </div>
   </aside>
 
@@ -528,11 +577,13 @@ function showDetail(n){
       ? `<div class="meta">propiedades</div>
          <pre>${escapeHtml(JSON.stringify(n.properties,null,2).slice(0,1500))}</pre>` : ""}
     <div style="display:flex;gap:8px;margin-top:12px">
+      <button id="dego" style="flex:1;font-size:12px">Ver ego-grafo</button>
       <button id="dexp" style="flex:1;font-size:12px">Expandir vecinos</button>
     </div>`;
 
   $("detail").classList.add("on");
   $("dexp").onclick = ()=> expand(id);
+  $("dego").onclick = ()=> renderEgo(Number(id));
   $("dbody").querySelectorAll(".relrow").forEach(row=>{
     row.onclick = ()=>{
       const go = row.dataset.go;
@@ -559,7 +610,132 @@ async function fetchNode(id){
   finally{ setLoading(false); }
 }
 
+/* ── pestaña: ficha de nodo ────────────────────────────── */
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on", t.dataset.tab === name));
+  $("paneSem").classList.toggle("off", name !== "sem");
+  $("paneNod").classList.toggle("off", name !== "nod");
+  if(name === "nod") $("nq").focus();
+}
+
+document.querySelectorAll(".tab").forEach(t=>{
+  t.onclick = ()=> switchTab(t.dataset.tab);
+});
+
+async function loadLabels(){
+  try{
+    const d = await (await fetch("/api/schema")).json();
+    const sel = $("nlabel");
+    (d.labels || []).forEach(l=>{
+      const o = document.createElement("option");
+      o.value = l; o.textContent = l;
+      sel.appendChild(o);
+    });
+  }catch(e){ console.warn("no se pudo cargar el esquema", e); }
+}
+loadLabels();
+
+/* Busca fichas de nodo por nombre o por el texto del contenido. */
+async function searchNodes(){
+  const q = $("nq").value.trim();
+  const label = $("nlabel").value;
+  const mode = $("nmode").value;
+  const limit = $("nlimit").value;
+  if(!q && !label){
+    $("nresults").innerHTML =
+      `<div class="empty">Escribe algo o elige una etiqueta para filtrar.</div>`;
+    return;
+  }
+  const url = `/api/nodes?q=${encodeURIComponent(q)}&label=${encodeURIComponent(label)}`
+            + `&mode=${mode}&limit=${limit}`;
+  setLoading(true);
+  try{
+    const r = await fetch(url);
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || "error");
+    state.nodeResults = d.results || [];
+    renderNodeResults(d);
+  }catch(e){
+    $("nresults").innerHTML = `<div class="empty">Error: ${escapeHtml(e.message)}</div>`;
+  }finally{ setLoading(false); }
+}
+
+function renderNodeResults(d){
+  const box = $("nresults");
+  const list = d.results || [];
+  if(!list.length){
+    box.innerHTML = `<div class="empty">Ningún nodo coincide.<br>Prueba en «en ambos» o sin filtro de etiqueta.</div>`;
+    return;
+  }
+  const head = `<div style="font-size:11px;color:var(--dim);padding:2px 4px 8px">
+    ${list.length} nodo${list.length>1?"s":""}
+    ${d.query ? `para «${escapeHtml(d.query)}»` : ""}
+    ${d.label ? `· etiqueta ${escapeHtml(d.label)}` : ""}</div>`;
+
+  box.innerHTML = head + list.map((n,i)=>`
+    <div class="card" data-ni="${i}">
+      <div class="top">
+        <span class="lab" style="color:${colorOf(n.label)}">${escapeHtml(n.label||"")}</span>
+        <span class="nm" title="${escapeHtml(n.name||"")}">${escapeHtml(n.name||"")}</span>
+        <span class="deg" title="conexiones">${n.degree}</span>
+      </div>
+      <div class="txt">${escapeHtml((n.excerpt||"(sin contenido)").slice(0,200))}</div>
+    </div>`).join("");
+
+  box.querySelectorAll(".card").forEach(c=>{
+    c.addEventListener("click", ()=>{
+      const n = list[+c.dataset.ni];
+      box.querySelectorAll(".card").forEach(x=>x.classList.remove("sel"));
+      c.classList.add("sel");
+      openNode(n.id);
+    });
+  });
+}
+
+/* Abre un nodo: dibuja su ego-grafo, lo centra y enseña la ficha completa. */
+async function openNode(id, opts){
+  opts = opts || {};
+  await renderEgo(id, opts.hops);
+  await fetchNode(id);
+}
+
+/* Ego-grafo con aristas reales (incluye las que unen a los propios vecinos). */
+async function renderEgo(id, hops){
+  hops = hops || 1;
+  setLoading(true);
+  try{
+    const r = await fetch(`/api/ego?id=${encodeURIComponent(id)}&hops=${hops}&limit=250`);
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || "error");
+
+    cy.elements().remove();
+    const center = d.center || { id };
+    const cnode = addNode({ id:center.id, label:center.label, name:center.name }, true);
+
+    (d.nodes||[]).forEach(n=>{
+      if(String(n.id) !== String(center.id)) addNode(n, false);
+    });
+    (d.edges||[]).forEach(e=> addEdge(e.source, e.target, e.type));
+
+    cy.edges().toggleClass("showlabels", state.labels);
+    runLayout();
+    if(d.truncated){
+      $("counter").textContent += " · recortado";
+    }
+    if(cnode.length) cnode.select();
+  }catch(e){
+    $("dbody").innerHTML = `<div class="empty">No se pudo cargar el ego-grafo: ${escapeHtml(e.message)}</div>`;
+    $("detail").classList.add("on");
+  }finally{ setLoading(false); }
+}
+
 /* ── eventos ───────────────────────────────────────────── */
+$("ngo").onclick = searchNodes;
+$("nq").addEventListener("keydown", e=>{ if(e.key === "Enter") searchNodes(); });
+$("nmode").onchange = ()=>{ if($("nq").value.trim() || $("nlabel").value) searchNodes(); };
+$("nlabel").onchange = ()=>{ if($("nlabel").value || $("nq").value.trim()) searchNodes(); };
+$("nlimit").onchange = ()=>{ if($("nq").value.trim() || $("nlabel").value) searchNodes(); };
+
 $("go").onclick = doSearch;
 $("q").addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
 $("plot").onclick = plotResults;
