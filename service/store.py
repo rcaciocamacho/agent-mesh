@@ -27,9 +27,10 @@ from psycopg_pool import ConnectionPool
 from embeddings import embed, cosine
 from migrations import apply_migrations, pgvector_active
 
+_FTS_SOURCE = ("coalesce(label,'')||' '||coalesce(name,'')||' '||coalesce(text,'')")
+
 def _fts_expr() -> str:
-    return ("to_tsvector('spanish', "
-            "coalesce(label,'')||' '||coalesce(name,'')||' '||coalesce(text,''))")
+    return f"to_tsvector('spanish', {_FTS_SOURCE})"
 
 class ConflictError(Exception):
     """Versión desactualizada en escritura (optimistic locking, HTTP 409)."""
@@ -47,7 +48,12 @@ class Store:
             # F0: aplicar migraciones versionadas (idempotente)
             apply_migrations(self.pool)
             self.pgvector = pgvector_active(self.pool)
-        print(f"[kb] pgvector activo: {self.pgvector}")
+            # F6: columna tsv generada. Si la migración 006 no pudo aplicarse,
+            # se cae al cálculo al vuelo (comportamiento anterior).
+            self.tsv = bool(conn.execute(
+                "SELECT 1 FROM information_schema.columns"
+                " WHERE table_name='nodes' AND column_name='tsv'").fetchone())
+        print(f"[kb] pgvector activo: {self.pgvector} · tsv almacenado: {self.tsv}")
 
     @contextmanager
     def _c(self):
@@ -214,19 +220,48 @@ class Store:
                 (agent, action, d))
 
     # ── búsqueda / recorrido ───────────────────────────────────────────────
-    def search(self, query: str, limit: int = 10) -> list[dict]:
+    def search(self, query: str, limit: int = 10, full: bool = False) -> list[dict]:
+        """Búsqueda full-text. Por defecto devuelve un extracto por nodo.
+
+        full=True devuelve el `text` completo (compatibilidad). Por defecto el
+        campo `text` lleva un `ts_headline` de ~320 caracteres: un
+        /search?limit=8 pasaba de 117 KB a ~3 KB. `text_len` indica el tamaño
+        real y `snippet=True` avisa de que `text` es un extracto.
+        """
         q = self._reindex_query(query)
-        sql = (f"SELECT id, label, name, text, properties,"
-               f" ts_rank({_fts_expr()}, plainto_tsquery('spanish', %s)) AS rank"
-               f" FROM nodes WHERE {_fts_expr()} @@ plainto_tsquery('spanish', %s)"
-               f" ORDER BY rank DESC, updated_at DESC LIMIT %s")
+        qq = "plainto_tsquery('spanish', %s)"
+        rank = where = "tsv" if self.tsv else _fts_expr()
         with self._c() as cur:
-            # Con ~1000 filas el planificador prefiere Seq Scan y recalcula
-            # to_tsvector de cada nodo (6-12 s medidos). El índice GIN hace la
-            # misma búsqueda en ~0,7 s: se fuerza solo para esta consulta.
-            cur.execute("SET LOCAL enable_seqscan = off")
-            cur.execute(sql, (q, q, limit))
-            return [self._node(r) for r in cur.fetchall()]
+            if not self.tsv:
+                # fallback: expresión al vuelo (migración 006 no aplicada)
+                cur.execute("SET LOCAL enable_seqscan = off")
+            if full:
+                sql = (f"SELECT id, label, name, text, properties, version,"
+                       f" ts_rank({rank}, {qq}) AS rank, length(text) AS text_len,"
+                       f" updated_at FROM nodes WHERE {where} @@ {qq}"
+                       f" ORDER BY rank DESC, updated_at DESC LIMIT %s")
+            else:
+                sql = (f"SELECT id, label, name, properties, version,"
+                       f" ts_rank({rank}, {qq}) AS rank, length(text) AS text_len,"
+                       f" updated_at,"
+                       f" ts_headline('spanish', text, {qq},"
+                       f" 'StartSel=, StopSel=, MaxFragments=2, MaxWords=45,"
+                       f" MinWords=12, FragmentDelimiter=…') AS snippet"
+                       f" FROM nodes WHERE {where} @@ {qq}"
+                       f" ORDER BY rank DESC, updated_at DESC LIMIT %s")
+            # la variante con ts_headline lleva un placeholder más (su query)
+            cur.execute(sql, (q, q, limit) if full else (q, q, q, limit))
+            out = []
+            for r in cur.fetchall():
+                row = self._node(r)
+                row["text_len"] = r["text_len"]
+                if not full:
+                    row["text"] = r["snippet"] or ""
+                    row["snippet"] = True
+                else:
+                    row["snippet"] = False
+                out.append(row)
+            return out
 
     def neighbors(self, node_id: int, hops: int = 1, limit: int = 50) -> dict:
         sql = """

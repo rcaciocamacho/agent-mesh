@@ -211,9 +211,11 @@ def del_conversation(session_id: str, authorization: str | None = Header(None)):
 # ── búsqueda / similaridad / grafo ─────────────────────────────────────────
 @app.get("/search")
 def search(q: str = Query(...), limit: int = Query(10, ge=1, le=100),
+           full: int = Query(0, ge=0, le=1),
            authorization: str | None = Header(None)):
     _check_auth(authorization)
-    return {"query": q, "results": store().search(q, limit)}
+    return {"query": q, "full": bool(full),
+            "results": store().search(q, limit, full=bool(full))}
 
 @app.post("/similar")
 def similar(body: dict, limit: int = Query(10, ge=1, le=100),

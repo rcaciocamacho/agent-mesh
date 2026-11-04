@@ -104,10 +104,11 @@ async def search(
     q: str = Query(..., min_length=1),
     mode: str = Query("semantic", pattern="^(semantic|fts)$"),
     limit: int = Query(12, ge=1, le=100),
+    full: int = Query(0, ge=0, le=1),
 ):
     """mode=semantic -> /similar (embeddings); mode=fts -> /search (full-text)."""
     if mode == "fts":
-        data = await _get("/search", q=q, limit=limit)
+        data = await _get("/search", q=q, limit=limit, full=full)
         return {"query": q, "mode": "fts", "results": data.get("results", [])}
 
     async with _client() as c:
@@ -354,7 +355,8 @@ async def node_detail(id: int = Query(..., ge=1), name: str = Query("")):
 
     if not name:
         raise HTTPException(404, "nodo no encontrado")
-    data = await _get("/search", q=name, limit=50)
+    # full=1: esta ruta devuelve el nodo entero, no un extracto
+    data = await _get("/search", q=name, limit=50, full=1)
     for item in data.get("results", []):
         if item.get("id") == id:
             return item

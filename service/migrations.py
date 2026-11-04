@@ -124,6 +124,30 @@ def _optimistic_locking(conn) -> None:
         "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 1"
     )
 
+# ── migración 006: tsvector almacenado (FTS rápida) ───────────────────────
+# Antes el tsvector se recalculaba dos veces por fila (filtro y rank). Con ~344
+# coincidencias de ~2 KB cada una eran ~820 ms solo de to_tsvector repetido.
+# Como columna generada baja el mismo trabajo a ~20 ms (medido 2026-11-04).
+# El índice de expresión antiguo sobra: dos GIN del mismo contenido solo
+# encarecen cada escritura.
+_FTS_SOURCE = ("coalesce(label,'')||' '||coalesce(name,'')||' '||coalesce(text,'')")
+
+def _fts_stored(conn) -> None:
+    # Fail-soft: ALTER TABLE y DROP INDEX exigen ser dueño de la tabla. El rol
+    # de la app (kb) no lo es en TrueNAS (dueño: dev), así que sin privilegios
+    # esta migración se marca skipped y store.search() sigue con la expresión
+    # al vuelo. No debe tumbar el arranque por una optimización.
+    try:
+        conn.execute(
+            "ALTER TABLE nodes ADD COLUMN IF NOT EXISTS tsv tsvector "
+            "GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, "
+            + _FTS_SOURCE + ")) STORED"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_nodes_tsv ON nodes USING GIN (tsv)")
+        conn.execute("DROP INDEX IF EXISTS idx_nodes_fts")
+    except Exception as e:
+        raise _SkipMigration(f"sin privilegios para tsv almacenado: {e}") from e
+
 class _SkipMigration(Exception):
     """Migración no aplicable en este entorno (se registra como skipped)."""
 
@@ -133,6 +157,7 @@ MIGRATIONS = [
     {"id": 3, "name": "ttl_conversations", "run": _ttl_conversations},
     {"id": 4, "name": "tokens_audit", "run": _tokens_audit},
     {"id": 5, "name": "optimistic_locking", "run": _optimistic_locking},
+    {"id": 6, "name": "fts_stored_tsvector", "run": _fts_stored},
 ]
 
 def apply_migrations(pool) -> dict:
@@ -161,7 +186,13 @@ def apply_migrations(pool) -> dict:
                 m["run"](conn)
                 status = "applied"
                 applied.append(m["name"])
-            except _SkipMigration as e:
+            except Exception as e:
+                # Un fallo dentro de la migración deja la transacción abortada:
+                # hay que revertirla ANTES de registrar el estado, o el propio
+                # INSERT de schema_migrations falla en cascada.
+                conn.rollback()
+                if not isinstance(e, _SkipMigration):
+                    raise
                 status = "skipped"
                 skipped.append(m["name"])
                 print(f"[kb] ⚠️ migración {m['id']} ({m['name']}) skipped: {e}")
