@@ -17,6 +17,8 @@ Config: KB_DSN (postgres://...) — ver .env.example.
 
 from __future__ import annotations
 
+import re
+
 import json
 import time
 from contextlib import contextmanager
@@ -245,8 +247,8 @@ class Store:
                        f" ts_rank({rank}, {qq}) AS rank, length(text) AS text_len,"
                        f" updated_at,"
                        f" ts_headline('spanish', text, {qq},"
-                       f" 'StartSel=, StopSel=, MaxFragments=2, MaxWords=45,"
-                       f" MinWords=12, FragmentDelimiter=…') AS snippet"
+                       f" 'StartSel=<mark>,StopSel=</mark>,MaxFragments=2,"
+                       f" MaxWords=45,MinWords=12') AS snippet"
                        f" FROM nodes WHERE {where} @@ {qq}"
                        f" ORDER BY rank DESC, updated_at DESC LIMIT %s")
             # la variante con ts_headline lleva un placeholder más (su query)
@@ -256,7 +258,9 @@ class Store:
                 row = self._node(r)
                 row["text_len"] = r["text_len"]
                 if not full:
-                    row["text"] = r["snippet"] or ""
+                    # ts_headline marca los terminos con <mark>. Aqui el campo
+                    # text es prosa para agentes y para el foro, no HTML.
+                    row["text"] = re.sub(r"</?mark>", "", r["snippet"] or "")
                     row["snippet"] = True
                 else:
                     row["snippet"] = False

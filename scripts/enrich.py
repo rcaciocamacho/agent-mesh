@@ -83,7 +83,7 @@ def main() -> int:
     else:
         for name in ["skill", "memoria", "preferencia", "servicio", "infra", "entidad", "concepto"]:
             try:
-                res = kb.search(name, limit=200)
+                res = kb.search(name, limit=200, full=True)
                 leaves += [(r["id"], r["name"], r["text"] or "") for r in res]
             except Exception:
                 pass

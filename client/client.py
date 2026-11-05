@@ -97,9 +97,16 @@ class Client:
             "type": etype, "source": source, "target": target,
             "properties": properties or {}})
 
-    def search(self, q: str, limit: int = 10) -> list[dict]:
+    def search(self, q: str, limit: int = 10, full: bool = False) -> list[dict]:
+        """full=True devuelve el `text` completo; por defecto llega un extracto.
+
+        El servicio devuelve un ts_headline (~320 car.) salvo full=1. Los usos
+        que necesitan el cuerpo entero (cuerpos de mensajes, matching por
+        palabras) tienen que pedirlo explícitamente.
+        """
         import urllib.parse
-        resp = self._req("GET", f"/search?q={urllib.parse.quote(q)}&limit={limit}")
+        extra = "&full=1" if full else ""
+        resp = self._req("GET", f"/search?q={urllib.parse.quote(q)}&limit={limit}{extra}")
         return resp.get("results", [])
 
     def similar(self, text: str, limit: int = 10) -> list[dict]:
